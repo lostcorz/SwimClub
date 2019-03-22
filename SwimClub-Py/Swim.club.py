@@ -1,4 +1,4 @@
-"PRCACAwardsConfig = {
+PRCACAwardsConfig = {
     "Points" : {
         "Regular" : {
             #All Below are 1 Point
@@ -153,7 +153,6 @@ def SwimmerData(csv_path):
                 surname = swimmer.split(" ")[1]
                 firstname = swimmer.split(" ")[0]
                 swimmer = f"{surname}, {firstname}"
-            print(f"Swimmer - {swimmer}, Event - {eventname}")
             try:
                 swimmers[swimmer]
             except KeyError:
@@ -337,46 +336,64 @@ def AchievementAwards(SwimmerData, AwardListLocation = None):
             if newawards != None:
                 outputobj[swimmer] = newawards
     return outputobj
-"
-def TowelAwards(SwimmerData, Strokename, AwardListLocation, StartDate, NumberofWeeks = 4)
-from datetime import datetime, timedelta
-from csv import DictReader
-towel = PRCACAwardsConfig['Towel']
-StartList = StartDate.split('/')
-yearstr = f"20{StartList[2]}"
-FirstClubNight = datetime(year=int(yearstr),month=int(StartList[1]),day=int(StartList[0]))
-aWeek = timedelta(days=7)
-filters = []
-for i in range(0,NumberofWeeks):
-    ClubNight = FirstClubNight + (aWeek * i)
-    filters.append(ClubNight.strftime('%y%m%d'))
-events = []
-for distance in towel['Distances']:
-    events.append(f"{Strokename}{distance}")
-pointslist = []
-outputlist = []
-try:
-    AwardFile = f"{AwardListLocation}\AwardsList.csv"
-    AwardsList = DictReader(open(AwardFile))
-except:
-    quit
-    for swmr, strokes in SwimmerData.items()
-        for line in AwardsList:
-            if line['Swimmer'] == swmr and line['TowelAwards'] != '':
-                AlreadyTowelled = True
-            else:
-                AlreadyTowelled = False
-        if AlreadyTowelled:
+
+def TowelAwards(SwimmerData, Strokename, AwardListLocation, StartDate, NumberofWeeks = 4):
+    from datetime import datetime, timedelta
+    from csv import DictReader
+    towel = PRCACAwardsConfig['Towel']
+    StartList = StartDate.split('/')
+    yearstr = f"20{StartList[2]}"
+    FirstClubNight = datetime(year=int(yearstr),month=int(StartList[1]),day=int(StartList[0]))
+    aWeek = timedelta(days=7)
+    filters = []
+    for i in range(0,NumberofWeeks):
+        ClubNight = FirstClubNight + (aWeek * i)
+        filters.append(ClubNight.strftime('%y%m%d'))
+    events = []
+    for distance in towel['Distances']:
+        events.append(f"{Strokename}{distance}")
+    pointslist = []
+    outputlist = []
+    try:
+        AwardFile = f"{AwardListLocation}\AwardsList.csv"
+        with open(AwardFile) as csv:
+            AwardsList = DictReader(open(AwardFile))
+            previousrecips = [i['Swimmer'] for i in AwardsList if i['TowelAwards'] != '']
+    except:
+        quit
+    for swmr, strokes in SwimmerData.items():
+        if swmr in previousrecips:
+            print(f'{swmr} bypassed')
             continue
         else:
+            print(f'{swmr} evaluated')
             swmrevents = [stroke for stroke in strokes.keys() if stroke in events]
             points = 0
+            agelist = []
             for evt in swmrevents:
+                agelist.append(max(i['Age'] for i in strokes[evt]))
                 for meet in strokes[evt]:
                     if meet['Points'] != None and meet['Date'] in filters:
                         points += meet['Points']
-            if points >= towel['MinPoints']
+            swmrage = int(max(agelist))
+            if points >= towel['MinPoints']:
+                pointslist.append({'Swimmer': swmr, 'Age': swmrage, 'Points': points})
+    for rangename, agesinrange in towel['AgeRanges'].items():
+        rangeswimmers = [i for i in pointslist if i['Age'] in agesinrange]
+        if rangeswimmers != []:
+            toppoints = max(i['Points'] for i in rangeswimmers)
+            topswmrs = [i for i in rangeswimmers if i['Points'] == toppoints]
+            for x in topswmrs:
+                outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points']})
+    return outputlist
                 
+ def AggregatePoints(SwimmerData):
+    Aggpoints = PRCACAwardsConfig['AggregatePoints']
+    outputlist = []
+filters = []
+for evt, Distances in Aggpoints['Events'].items():
+    evtlist = [f"{evt}{dist}" for dist in Distances]
+    filters.append(i for i in evtlist)          
 
 
 
@@ -386,5 +403,3 @@ except:
 def UpdateAwardsList(csv_path):
     pass
 
-def AggregatePointsAwards(csv_path):
-    pass
