@@ -103,15 +103,14 @@ function Confirm-SwimmerData {
             foreach ($cat in $SwimmerData[$evt].Keys) {
                 $sorted = $SwimmerData[$evt][$cat] | sort timespan
                 if ($sorted.count -gt 1) {
-                    $count = 
                     foreach ($i in (0..($sorted.count-1))) {
-                        if ($i = 0) {
+                        if ($i -eq 0) {
                             $sorted[$i].Points = $1st
                         }
-                        elseif ($i = 1) {
+                        elseif ($i -eq 1) {
                             $sorted[$i].Points = $2nd
                         }
-                        elseif ($i = 2) {
+                        elseif ($i -eq 2) {
                             $sorted[$i].Points = $3rd
                         }
                         else {
@@ -132,103 +131,43 @@ function Confirm-SwimmerData {
 function Get-AgeChampions {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true,Position=0)]$SwimmerData,
-        [Parameter(HelpMessage="Path to AwardsList.csv file")]$AwardsListLocation
+        [Parameter(Mandatory=$true,Position=0)]$SwimmerData
     )
     begin {
-        $pbnum = $PRCACAwardsConfig['Achievement']['PBsPerAward']
-        $pathcheck = Test-Path "$AwardsListLocation\AwardsList.csv" -ErrorAction SilentlyContinue
-        if ($pathcheck) {
-            $AwardsList = Import-csv $AwardsListLocation\"AwardsList.csv"    
-        }
-        else {
-            $AwardsList = $null
-        }
-        $array = @()
+        $outputarray = @()
     }
     process {
-        foreach ($swimmer in $SwimmerData.Keys) {
-            $pbtable = @{}
-            $AwardsDue = @()
-            foreach ($stroke in $SwimmerData[$swimmer].Keys) {
-                if ($SwimmerData[$swimmer][$stroke].pb -contains "Yes") {
-                    $pbs = ($SwimmerData[$swimmer][$stroke] | where {$_.pb -eq "Yes"}).count
-                    if (-not $pbs) {
-                        $pbs = 1                    
-                    }
-                    $pbtable[$stroke] = $pbs
-                }
+        $swimmers = $data.values.values.Swimmer | select -unique
+        $events = $data.Keys
+        foreach ($swimmer in $swimmers) {
+            $obj = New-Object psobject
+            $obj | Add-Member -MemberType NoteProperty -Name Swimmer -Value $swimmer
+            $obj | Add-Member -MemberType NoteProperty -Name Category -Value $null
+            $obj | Add-Member -MemberType NoteProperty -Name TotalPoints -Value $null
+            foreach ($evt in $events) {
+                $obj | Add-Member -MemberType NoteProperty -Name $evt -Value $null
             }
-            foreach ($stroke in $pbtable.Keys){
-                #---------------------------------
-                # Achievement award criteria logic
-                #---------------------------------
-                # set the pb number
-                $totalpbs = $pbtable[$stroke]
-                #-----------------------------------------
-                # 25m efforts carry over to 50m with no previous combined award.
-                if ($stroke -like "*50" -and ($pbtable["$($stroke.Replace("50","25"))"] % $pbnum) -in (1..($pbnum-1))) {
-                    $totalpbs = ($pbtable["$($stroke.Replace("50","25"))"] % $pbnum) + $pbtable[$stroke]
-                    $25slash50 = $true
-                }
-                else {
-                    $25slash50 = $false
-                }
-                #Only continue to process if there are 3 or more pbs
-                If ($totalpbs -ge $pbnum) {
-                    Write-Verbose "Award triggered - $totalpbs pbs in $Stroke for $swimmer"
-                    #-----------------------------------------
-                    # 3 PBs in one event.
-                    if ($totalpbs -ge $pbnum -and $25slash50) {
-                        $AwardsDue += "$($stroke.Replace("50","25"))/50"
-                    }
-                    elseif ($totalpbs -ge $pbnum) {
-                        $AwardsDue += $stroke
-                    }
-                    #-----------------------------------------
-                    # 6 PBs in one event.
-                    if ($totalpbs -ge ($pbnum * 2) -and $25slash50) {
-                        $AwardsDue += $stroke
-                    }
-                    elseif ($totalpbs -ge ($pbnum * 2)) {
-                        $AwardsDue += "$stroke(#2)"
-                    }
-                    #-----------------------------------------
-                    # 9 PBs in one event.
-                    if ($totalpbs -ge ($pbnum * 3) -and $25slash50) {
-                        $AwardsDue += "$stroke(#2)"
-                    }
-                    elseif ($totalpbs -ge ($pbnum * 3)) {
-                        $AwardsDue += "$stroke(#3)"
-                    }
-                }
-                else {
-                    Write-Verbose "Insufficient pbs in $Stroke for $swimmer - $totalpbs"
-                }
-            }
-            if ($AwardsDue.count -gt 0) {
-                $newawards = $null
-                $swmrawards = ($AwardsList | where {$_.swimmer -like $swimmer}).achievementawards
-                foreach ($award in $AwardsDue) {
-                    if ($swmrawards -notlike "*$($award)*" -and $newawards -eq $null) {
-                        $newawards += $award
-                    }
-                    elseif ($swmrawards -notlike "*$($award)*" -and $newawards -ne $null) {
-                        $newawards += ", $award"
-                    }
-                }
-                if ($newawards) {
-                    $obj = New-Object PSObject
-                    $obj | Add-Member -MemberType NoteProperty -Name Swimmer -Value $swimmer
-                    $obj | Add-Member -MemberType NoteProperty -Name AwardsDue -Value $newawards
-                    $array += $obj
-                    Write-Verbose "Awards in $newawards for $swimmer"
+            $outputarray += $obj
+        }
+        foreach ($evt in $SwimmerData.Keys) {
+            foreach ($cat in $SwimmerData[$evt].Keys) {
+                foreach ($swimmer in $SwimmerData[$evt][$cat]) {
+                    $arrayobj = $outputarray | where {$_.Swimmer -eq $swimmer.Swimmer}
+                    $arrayobj.Category = $cat
+                    $arrayobj.$evt = $swimmer.Points
                 }
             }
         }
+        foreach ($swimmer in $outputarray) {
+            $totalpoints = 0
+            foreach ($evt in $events) {
+                $totalpoints += $swimmer.$evt
+            }
+            $swimmer.TotalPoints = $totalpoints
+        }   
     }
     end {
-        Write-Output ($array | sort Swimmmer)
+        Write-Output ($outputarray | sort Category, TotalPoints -Descending)
     }
 }
 
@@ -244,16 +183,4 @@ function Get-AgeChampions {
 
 Export-ModuleMember -function Get-SwimmerData
 Export-ModuleMember -function Confirm-SwimmerData
-Export-ModuleMember -function Get-AchievementAwards
-Export-ModuleMember -function Get-TowelAwards
-Export-ModuleMember -function Update-AwardsList
-Export-ModuleMember -function Get-AggregatePointsTrophies
-Export-ModuleMember -function Get-25ImprovementTrophies
-Export-ModuleMember -function Get-IMPointsTrophies
-Export-ModuleMember -Function Get-PinetathlonTrophies
-Export-ModuleMember -function Get-DistanceTrophies
-Export-ModuleMember -function Get-EnduranceTrophies
-Export-ModuleMember -function Get-ClubChampion
-Export-ModuleMember -function Get-ModifiedData
-Export-ModuleMember -function Get-SwimmersEvents
-Export-ModuleMember -function Get-ExcelData
+Export-ModuleMember -function Get-AgeChampions
