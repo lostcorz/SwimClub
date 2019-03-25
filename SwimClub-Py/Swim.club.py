@@ -107,6 +107,7 @@ def SwimmerData(csv_path):
     files = list(Path(csv_path).glob("*.csv"))
     swimmers = {}
     for file in files:
+        print(file.stem)
         meetdate = file.stem[file.stem.index("_")+1:len(file.stem)]
         if ("clubnight" in file.stem):
             csv_data = DictReader(open(file), fieldnames=range(1,186))
@@ -119,6 +120,8 @@ def SwimmerData(csv_path):
             DistIndex = (0-1) #Event Distance relative to 'SC' in string
             StrokeIndex = (0+2) #Event name relative to 'SC' in string
             filetype = "Meet"
+        elif ("clubchamps" in file.stem):
+            continue
         else:
             csv_data = DictReader(open(file))
             eventname = file.stem[0:file.stem.index("_")]
@@ -387,13 +390,57 @@ def TowelAwards(SwimmerData, Strokename, AwardListLocation, StartDate, NumberofW
                 outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points']})
     return outputlist
                 
- def AggregatePoints(SwimmerData):
+def AggregatePoints(SwimmerData):
     Aggpoints = PRCACAwardsConfig['AggregatePoints']
     outputlist = []
-filters = []
-for evt, Distances in Aggpoints['Events'].items():
-    evtlist = [f"{evt}{dist}" for dist in Distances]
-    filters.append(i for i in evtlist)          
+    filters = []
+    for evt, Distances in Aggpoints['Events'].items():
+        evtlist = [f"{evt}{dist}" for dist in Distances]
+        for evt in evtlist:
+            filters.append(evt)
+    for swmr, strokes in SwimmerData.items():
+        agelist = []
+        events = [stroke for stroke in strokes.keys() if stroke in filters]
+        swmrpoints = 0
+        for evt in events:
+            evtpoints = sum(i['Points'] for i in SwimmerData[swmr][evt] if i['Points'] != None)
+            swmrpoints += evtpoints
+            agelist.append(max([i['Age'] for i in SwimmerData[swmr][evt] if isinstance(i['Age'],int)]))
+        swmrage = max(agelist)
+        rangename = [k for k, v in Aggpoints['AgeRanges'].items() if swmrage in v][0]
+        obj = {
+            'Swimmer': swmr,
+            'Category': rangename,
+            'Age': swmrage,
+            'Points': swmrpoints,
+            'CategoryPlacing': None,
+            'Trophy': None
+        }
+        outputlist.append(obj)
+    for cat in Aggpoints['AgeRanges'].keys():
+        placing = 1
+        CatSwmrs = [i for i in outputlist if i['Category'] == cat]
+        trophyplaces = round(len(CatSwmrs) * (Aggpoints['TopPercentAwarded']/100))
+        catpoints = sorted(set([i['Points'] for i in CatSwmrs]),reverse=True)
+        for i in catpoints:
+            placegetters = [c for c in CatSwmrs if c['Points'] == i]
+            for p in placegetters:
+                if placing in range(1,(trophyplaces+1)):
+                    p['CategoryPlacing'] = placing
+                    p['Trophy'] = 'Yes'
+                else:
+                    p['CategoryPlacing'] = placing
+            placing += len(placegetters)
+    return outputlist
+
+def Improvement25(SwimmerData, Strokename):
+    from datetime import datetime, timedelta
+    improve25 = PRCACAwardsConfig['25Improvement']
+    promotetimespan = datetime.strptime(improve25['ProgressTimes'][Strokename], TimePatterns(improve25['ProgressTimes'][Strokename]))
+    outputlist = []
+for k, v in SwimmerData.items():
+    for i in v.values():
+        print(i['Date'])
 
 
 

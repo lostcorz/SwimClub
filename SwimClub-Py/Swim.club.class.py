@@ -1,5 +1,5 @@
-class SwimmerData(object):
-    PRCAC = {
+class PRCACAwards(object):
+    config = {
         "Points" : {
             "Regular" : {
                 #All Below are 1 Point
@@ -43,7 +43,7 @@ class SwimmerData(object):
             "AgeRanges" : {
                 "7andUnder" : range(4,8),
                 "8and9" : range(8,10),
-                "10andOver" : range(10,18),
+                "10andOver" : range(10,18)
             },
             "TopPercentAwarded" : 25
         },
@@ -156,7 +156,6 @@ class SwimmerData(object):
                     surname = swimmer.split(" ")[1]
                     firstname = swimmer.split(" ")[0]
                     swimmer = f"{surname}, {firstname}"
-                print(f"Swimmer - {swimmer}, Event - {eventname}")
                 try:
                     swimmers[swimmer]
                 except KeyError:
@@ -180,8 +179,8 @@ class SwimmerData(object):
     def ConfirmData(self):
         from datetime import datetime, timedelta
         #setup config & timedeltas
-        enduranceDist = SwimmerData.PRCAC['Endurance']['Events']
-        ptsdefs = SwimmerData.PRCAC['Points']
+        enduranceDist = PRCACAwards.config['Endurance']['Events']
+        ptsdefs = PRCACAwards.config['Points']
         timedeltas = {}
         for cat in ptsdefs.keys():
             timedeltas[cat] = {}
@@ -206,12 +205,12 @@ class SwimmerData(object):
                     change = None
                     points = None
                     try:
-                        meettimespan = datetime.strptime(meets[i]['Time'], SwimmerData.TimePatterns(meets[i]['Time']))
+                        meettimespan = datetime.strptime(meets[i]['Time'], PRCACAwards.TimePatterns(meets[i]['Time']))
                     except:
                         continue
                     if seedtime == None and meets[i]['seedTime'] != 'NT':
                         seedtime = meets[i]['seedTime']
-                        seedtimespan = datetime.strptime(seedtime, SwimmerData.TimePatterns(seedtime))
+                        seedtimespan = datetime.strptime(seedtime, PRCACAwards.TimePatterns(seedtime))
                     #else if the carried seedtime is not the same as the current, change it.
                     elif seedtime != None and meets[i]['seedTime'] != seedtime:
                         meets[i]['seedTime'] = seedtime
@@ -222,7 +221,7 @@ class SwimmerData(object):
                     #1st event?
                     if seedtime == None and meets[i]['seedTime'] == 'NT':
                         seedtime = meets[i]['Time']
-                        seedtimespan = datetime.strptime(seedtime, SwimmerData.TimePatterns(seedtime))
+                        seedtimespan = datetime.strptime(seedtime, PRCACAwards.TimePatterns(seedtime))
                         meets[i]['pb'] = 'No'
                         if endurance:
                             points = 4
@@ -260,7 +259,7 @@ class SwimmerData(object):
                             points = 8
                         meets[i]['pb'] = 'Yes'
                         seedtime = meets[i]['Time']
-                        seedtimespan = datetime.strptime(seedtime, SwimmerData.TimePatterns(seedtime))
+                        seedtimespan = datetime.strptime(seedtime, PRCACAwards.TimePatterns(seedtime))
                     else:
                         meets[i]['pb'] = 'No'
                         points = 4
@@ -273,7 +272,7 @@ class SwimmerData(object):
 
     def AchievementAwards(self, AwardListLocation = None):
         from csv import DictReader
-        pbnum = SwimmerData.PRCAC['Achievement']['PBsPerAward']
+        pbnum = PRCACAwards.config['Achievement']['PBsPerAward']
         try:
             AwardFile = f"{AwardListLocation}\AwardsList.csv"
             AwardsList = DictReader(open(AwardFile))
@@ -342,7 +341,7 @@ class SwimmerData(object):
     def TowelAwards(self, Strokename, AwardListLocation, StartDate, NumberofWeeks = 4):
         from datetime import datetime, timedelta
         from csv import DictReader
-        towel = SwimmerData.PRCAC['Towel']
+        towel = PRCACAwards.config['Towel']
         StartList = StartDate.split('/')
         yearstr = f"20{StartList[2]}"
         FirstClubNight = datetime(year=int(yearstr),month=int(StartList[1]),day=int(StartList[0]))
@@ -386,3 +385,46 @@ class SwimmerData(object):
                 for x in topswmrs:
                     outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points']})
         return outputlist
+
+    def AggregatePoints(self):
+        Aggpoints = PRCACAwards.config['AggregatePoints']
+        outputlist = []
+        filters = []
+        for evt, Distances in Aggpoints['Events'].items():
+            evtlist = [f"{evt}{dist}" for dist in Distances]
+            for evt in evtlist:
+                filters.append(evt)
+        for swmr, strokes in self.data.items():
+            agelist = []
+            events = [stroke for stroke in strokes.keys() if stroke in filters]
+            swmrpoints = 0
+            for evt in events:
+                evtpoints = sum(i['Points'] for i in self.data[swmr][evt] if i['Points'] != None)
+                swmrpoints += evtpoints
+                agelist.append(max([i['Age'] for i in self.data[swmr][evt] if isinstance(i['Age'],int)]))
+            swmrage = max(agelist)
+            rangename = [k for k, v in Aggpoints['AgeRanges'].items() if swmrage in v][0]
+            obj = {
+                'Swimmer': swmr,
+                'Category': rangename,
+                'Age': swmrage,
+                'Points': swmrpoints,
+                'CategoryPlacing': None,
+                'Trophy': None
+            }
+            outputlist.append(obj)
+        for cat in Aggpoints['AgeRanges'].keys():
+            placing = 1
+            CatSwmrs = [i for i in outputlist if i['Category'] == cat]
+            trophyplaces = round(len(CatSwmrs) * (Aggpoints['TopPercentAwarded']/100))
+            catpoints = sorted(set([i['Points'] for i in CatSwmrs]),reverse=True)
+            for i in catpoints:
+                placegetters = [c for c in CatSwmrs if c['Points'] == i]
+                for p in placegetters:
+                    if placing in range(1,(trophyplaces+1)):
+                        p['CategoryPlacing'] = placing
+                        p['Trophy'] = 'Yes'
+                    else:
+                        p['CategoryPlacing'] = placing
+                placing += len(placegetters)
+        return sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
