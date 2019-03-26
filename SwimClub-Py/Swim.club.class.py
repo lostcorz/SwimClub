@@ -132,7 +132,7 @@ class PRCACAwards(object):
                     scindex = rawevent.index('SC')
                     eventname = f"{rawevent[scindex + StrokeIndex]}{rawevent[scindex + DistIndex]}"
                     swimmer = sub('"','',line[SwimmerCol])
-                    age = sub('"','',line[AgeCol]).strip()
+                    age = int(sub('"','',line[AgeCol]).strip())
                     seed = sub('"','',line[SeedCol])
                     time = sub('"','',line[TimeCol])
                     rawpoints = sub('"','',line[PointsCol])
@@ -145,7 +145,7 @@ class PRCACAwards(object):
                     try:
                         age = int(sub(r'[^0-9]','',line['Age']).strip())
                     except ValueError:
-                        age = ""
+                        age = None
                     seed = line['SeedTime']
                     time = line['Time']
                     try:
@@ -435,7 +435,7 @@ class PRCACAwards(object):
         promotetimespan = datetime.strptime(improve25['ProgressTimes'][Strokename], TimePatterns(improve25['ProgressTimes'][Strokename]))
         outputlist = []
         meetdates = []
-        for k, v in self.data.items():
+        for v in self.data.values():
             for i in v.values():
                 meetdates = meetdates + [x['Date'] for x in i]
         meets = sorted(set(meetdates))
@@ -504,3 +504,13 @@ class PRCACAwards(object):
                 obj['TimeImprovement'] = improvement
                 outputlist.append(obj)
         return (sorted(outputlist, key = lambda x: x['TimeImprovement']))
+
+
+def WriteAwardCsv(awarddata, awardname, csvpath):
+    from csv import DictWriter
+    with open(f"{csvpath}\\{awardname}.csv", 'w', newline='') as csvfile:
+        fieldnames = [k for k in awarddata[0].keys()]
+        writer = DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for obj in outputlist:
+            writer.writerow(obj)
