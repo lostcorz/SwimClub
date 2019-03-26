@@ -548,5 +548,10 @@ def IMTrophy(SwimmerData):
             cat = [k for k, v in im['AgeRanges'] if max(agelist in v)]
             obj['Age'] = max(agelist)
 
-
-    
+def ToSeconds(timestr):
+    if ":" in timestr:
+        strsplit = timestr.split(':')
+        totalseconds = (float(strsplit[0]) * 60 + float(strsplit[1]))
+    else:
+        totalseconds = float(timestr)
+    return totalseconds
