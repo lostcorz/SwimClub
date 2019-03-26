@@ -428,3 +428,79 @@ class PRCACAwards(object):
                         p['CategoryPlacing'] = placing
                 placing += len(placegetters)
         return sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+
+    def Improvement25(self, Strokename):
+        from datetime import datetime, timedelta
+        improve25 = PRCACAwards.config['25Improvement']
+        promotetimespan = datetime.strptime(improve25['ProgressTimes'][Strokename], TimePatterns(improve25['ProgressTimes'][Strokename]))
+        outputlist = []
+        meetdates = []
+        for k, v in self.data.items():
+            for i in v.values():
+                meetdates = meetdates + [x['Date'] for x in i]
+        meets = sorted(set(meetdates))
+        for swmr, strokes in self.data.items():
+            if f"{Strokename}25" in strokes.keys():
+                obj = {
+                    'Swimmer': swmr,
+                }
+                fastest25span = None
+                first25span = None
+                for meet in meets:
+                    meet25 = [m for m in self.data[swmr][f"{Strokename}25"] if m['Date'] == meet]
+                    if meet25 != []:
+                        try:
+                            meet25span = datetime.strptime(meet25[0]['Time'], TimePatterns(meet25[0]['Time']))
+                        except:
+                            continue
+                        if not first25span:
+                            first25Time = meet25[0]['Time']
+                            first25span = meet25span
+                        meet25str = meet25[0]['Time']
+                        obj[meet] = meet25str
+                        if not fastest25span:
+                            fastest25str = meet25str
+                            fastest25span = meet25span
+                            fastestmeetdate = meet25[0]['Date']
+                        elif meet25span < fastest25span:
+                            fastest25str = meet25str
+                            fastest25span = meet25span
+                            fastestmeetdate = meet25[0]['Date']
+                    else:
+                        obj[meet] = None
+                fastestspan = fastest25span
+                fastesttimestr = fastest25str
+                try:
+                    events50 = self.data[swmr][f"{Strokename}50"]
+                    swmr50 = True
+                except KeyError:
+                    swmr50 = False
+                if fastest25span < promotetimespan and swmr50:
+                    fastest50 = None
+                    for meet in events50:
+                        try:
+                            meet50span = datetime.strptime(meet['Time'], TimePatterns(meet['Time']))
+                        except:
+                            continue
+                        if not fastest50:
+                            fastest50span = meet50span
+                            fastest50date = meet['Date']
+                        elif meet50span < fastest50span:
+                            fastest50span = meet50span
+                            fastest50date = meet['Date']
+                    zerospan = datetime.strptime('0', TimePatterns('0'))
+                    halved50 = (fastest50span - zerospan) / 2
+                    if halved50 < (fastest25span - zerospan):
+                        str25of50 = str(halved50.total_seconds())
+                        span25of50 = datetime.strptime(str25of50, TimePatterns(str25of50))
+                        obj[fastest50date] = f"{str25of50} (50m)"
+                        fastestspan = span25of50
+                        fastesttimestr = str25of50
+                        fastestmeetdate = fastest50date
+                improvement = str((fastestspan - first25span).total_seconds())
+                obj['FirstTime'] = first25Time
+                obj['FastestTime'] = fastesttimestr
+                obj['FastestMeetDate'] = fastestmeetdate
+                obj['TimeImprovement'] = improvement
+                outputlist.append(obj)
+        return (sorted(outputlist, key = lambda x: x['TimeImprovement']))
