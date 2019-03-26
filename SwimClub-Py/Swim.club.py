@@ -132,7 +132,7 @@ def SwimmerData(csv_path):
                 scindex = rawevent.index('SC')
                 eventname = f"{rawevent[scindex + StrokeIndex]}{rawevent[scindex + DistIndex]}"
                 swimmer = sub('"','',line[SwimmerCol])
-                age = sub('"','',line[AgeCol]).strip()
+                age = int(sub('"','',line[AgeCol]).strip())
                 seed = sub('"','',line[SeedCol])
                 time = sub('"','',line[TimeCol])
                 rawpoints = sub('"','',line[PointsCol])
@@ -145,7 +145,7 @@ def SwimmerData(csv_path):
                 try:
                     age = int(sub(r'[^0-9]','',line['Age']).strip())
                 except ValueError:
-                    age = ""
+                    age = None
                 seed = line['SeedTime']
                 time = line['Time']
                 try:
@@ -510,4 +510,43 @@ def Improvement25(SwimmerData, Strokename):
     return (sorted(outputlist, key = lambda x: x['TimeImprovement']))
 
 
+def WriteAwardCsv(awarddata, awardname, csvpath):
+    with open(f"{csvpath}\\{awardname}.csv", 'w', newline='') as csvfile:
+        fieldnames = [k for k in awarddata[0].keys()]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for obj in outputlist:
+            writer.writerow(obj)
 
+def UpdateAwardsList(newData, csvpath):
+    from csv import DictReader, DictWriter
+
+def IMTrophy(SwimmerData):
+    im = PRCACAwardsConfig['IM']
+    events = [f"IM{d}" for d in im['Distances']]
+    outputlist = []
+    for swmr in SwimmerData.keys():
+        strokes = [i for i in SwimmerData[swmr].keys() if i in events]
+        if strokes != []:
+            agelist = []
+            finalpoints = 0
+            obj = {
+                'Swimmer' = swmr,
+                'Age' = None,
+                'Category' = None,
+                'CategoryPlacing' = None
+            }
+            for evt in events:
+                if evt in strokes:
+                    strokepoints = sum([e['Points'] for e in SwimmerData[swmr][evt] if isinstance(e['Points'],int)])
+                    strokeage = max([e['Age'] for e in SwimmerData[swmr][evt]])
+                    obj[evt] = strokepoints
+                    finalpoints += strokepoints
+                    agelist += strokeage
+                else:
+                    obj[evt] = None
+            cat = [k for k, v in im['AgeRanges'] if max(agelist in v)]
+            obj['Age'] = max(agelist)
+
+
+    
