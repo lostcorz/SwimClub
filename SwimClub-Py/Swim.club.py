@@ -280,11 +280,14 @@ def AchievementAwards(SwimmerData, AwardListLocation = None):
     from csv import DictReader
     pbnum = PRCACAwardsConfig['Achievement']['PBsPerAward']
     try:
-        AwardFile = f"{AwardListLocation}\AwardsList.csv"
-        AwardsList = DictReader(open(AwardFile))
+        AwardsList = []
+        with open(f"{AwardListLocation}\\AwardsList.csv") as csvfile:
+            for line in DictReader(csvfile):
+                AwardsList.append(line)
     except:
+        print('it excepted...')
         AwardsList = None
-    outputobj = {}
+    outputlist = []
     for swimmer, strokes in SwimmerData.items():
         pbtable = {}
         AwardsDue = []
@@ -330,9 +333,10 @@ def AchievementAwards(SwimmerData, AwardListLocation = None):
         if len(AwardsDue) > 0:
             newawards = ''
             if AwardsList != None:
-                for line in AwardsList:
-                    if line['Swimmer'] == swimmer:
-                        swmrawards = line
+                try:
+                    swmrawards = [line['AchievementAwards'] for line in AwardsList if line['Swimmer'] == swimmer]
+                except:
+                    swmrawards = ''
             else:
                 swmrawards = ''
             for award in AwardsDue:
@@ -340,9 +344,9 @@ def AchievementAwards(SwimmerData, AwardListLocation = None):
                     newawards += award
                 elif award not in swmrawards and newawards != '':
                     newawards += f", {award}"
-            if newawards != None:
-                outputobj[swimmer] = newawards
-    return outputobj
+            if newawards != '':
+                outputlist.append({'Swimmer': swimmer, 'AchievementAwards': newawards})
+    return outputlist
 
 def TowelAwards(SwimmerData, Strokename, AwardListLocation, StartDate, NumberofWeeks = 4):
     from datetime import datetime, timedelta
@@ -391,7 +395,7 @@ def TowelAwards(SwimmerData, Strokename, AwardListLocation, StartDate, NumberofW
             toppoints = max(i['Points'] for i in rangeswimmers)
             topswmrs = [i for i in rangeswimmers if i['Points'] == toppoints]
             for x in topswmrs:
-                outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points']})
+                outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points'], 'AwardStroke': Strokename})
     return outputlist
                 
 def AggregatePoints(SwimmerData):
@@ -514,13 +518,7 @@ def Improvement25(SwimmerData, Strokename):
     return (sorted(outputlist, key = lambda x: x['TimeImprovement']))
 
 
-def WriteAwardCsv(awarddata, awardname, csvpath):
-    with open(f"{csvpath}\\{awardname}.csv", 'w', newline='') as csvfile:
-        fieldnames = [k for k in awarddata[0].keys()]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for obj in outputlist:
-            writer.writerow(obj)
+
 
 def IMTrophy(SwimmerData):
     im = PRCACAwardsConfig['IM']
@@ -715,13 +713,54 @@ def Endurance(SwimmerData):
 
 
 def UpdateAwardsList(newData, csvpath = None):
-from csv import DictReader, DictWriter
-if csvpath:
+    from csv import DictReader, DictWriter
     csvdata = []
-    with open(f'{csvpath}\\AwardsList.csv') as csvfile:
-        for line in DictReader(csvfile):
-            csvdata.append(line)
+    if csvpath:
+        with open(f'{csvpath}\\AwardsList.csv') as csvfile:
+            for line in DictReader(csvfile):
+                csvdata.append(line)
+    for s in newData:
+        try:
+            obj = [r for r in csvdata if r['Swimmer'] == s['Swimmer']][0]
+        except:
+            obj = None
+        if obj == None:
+            obj = {
+                'Swimmer': s['Swimmer'],
+                'AchievementAwards': '',
+                'TowelAwards': ''
+            }
+            csvdata.append(obj)
+        #Achievement Awards
+        try:
+            test = s['AchievementAwards']
+            achawrd = True
+        except KeyError:
+            achawrd = False
+        if obj['AchievementAwards'] != '' and achawrd:
+            obj['AchievementAwards'] += f", {s['AchievementAwards']}"
+        elif achawrd:
+            obj['AchievementAwards'] = s['AchievementAwards']
+        #Towel Awards
+        try:
+            test = s['AwardStroke']
+            twlawrd = True
+        except KeyError:
+            twlawrd = False
+        if twlawrd:
+            obj['TowelAwards'] = s['AwardStroke']
+    return csvdata
 
+def WriteAwardCsv(awarddata, awardname, csvpath):
+    from csv import DictWriter
+    if awardname in ['Achievement', 'Towel']:
+        awardname = 'AwardsList'
+    with open(f"{csvpath}\\{awardname}.csv", 'w', newline='') as csvfile:
+        fieldnames = [k for k in awarddata[0].keys()]
+        writer = DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for obj in awarddata:
+            writer.writerow(obj)
 
 
 
