@@ -93,14 +93,13 @@ class PRCACAwards(object):
     }
 
     @staticmethod
-    def TimePatterns(timestr):
+    def ToSeconds(timestr):
         if ":" in timestr:
-            pattern = "%M:%S.%f"
-        elif "." not in timestr:
-            pattern = "%S"
+            strsplit = timestr.split(':')
+            totalseconds = (float(strsplit[0]) * 60 + float(strsplit[1]))
         else:
-            pattern = "%S.%f"
-        return pattern
+            totalseconds = float(timestr)
+        return totalseconds
 
     def __init__(self,csv_path):
         from re import sub
@@ -185,11 +184,8 @@ class PRCACAwards(object):
         for cat in ptsdefs.keys():
             timedeltas[cat] = {}
             for lvl in ptsdefs[cat].keys():
-                secs = int(ptsdefs[cat][lvl].split('.')[0])
-                millis = int(ptsdefs[cat][lvl].split('.')[1])*10
                 keystr = f"{lvl[0]}ptTimeDelta"
-                valdelta = timedelta(seconds=secs,milliseconds=millis)
-                timedeltas[cat][keystr] = valdelta
+                timedeltas[cat][keystr] = timedelta(seconds=ToSeconds(ptsdefs[cat][lvl]))
         #loop through swimmerdata
         for swmr, strokes in self.data.items():
             for stroke, meets in strokes.items():
@@ -205,12 +201,12 @@ class PRCACAwards(object):
                     change = None
                     points = None
                     try:
-                        meettimespan = datetime.strptime(meets[i]['Time'], PRCACAwards.TimePatterns(meets[i]['Time']))
+                        meettimespan = timedelta(seconds=ToSeconds(meets[i]['Time']))
                     except:
                         continue
                     if seedtime == None and meets[i]['seedTime'] != 'NT':
                         seedtime = meets[i]['seedTime']
-                        seedtimespan = datetime.strptime(seedtime, PRCACAwards.TimePatterns(seedtime))
+                        seedtimespan = timedelta(seconds=ToSeconds(seedtime))
                     #else if the carried seedtime is not the same as the current, change it.
                     elif seedtime != None and meets[i]['seedTime'] != seedtime:
                         meets[i]['seedTime'] = seedtime
@@ -221,7 +217,7 @@ class PRCACAwards(object):
                     #1st event?
                     if seedtime == None and meets[i]['seedTime'] == 'NT':
                         seedtime = meets[i]['Time']
-                        seedtimespan = datetime.strptime(seedtime, PRCACAwards.TimePatterns(seedtime))
+                        seedtimespan = timedelta(seconds=ToSeconds(seedtime))
                         meets[i]['pb'] = 'No'
                         if endurance:
                             points = 4
@@ -259,7 +255,7 @@ class PRCACAwards(object):
                             points = 8
                         meets[i]['pb'] = 'Yes'
                         seedtime = meets[i]['Time']
-                        seedtimespan = datetime.strptime(seedtime, PRCACAwards.TimePatterns(seedtime))
+                        seedtimespan = timedelta(seconds=ToSeconds(seedtime))
                     else:
                         meets[i]['pb'] = 'No'
                         points = 4
@@ -386,7 +382,7 @@ class PRCACAwards(object):
                     outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points']})
         return outputlist
 
-    def AggregatePoints(self):
+    def AggPoints(self):
         Aggpoints = PRCACAwards.config['AggregatePoints']
         outputlist = []
         filters = []
@@ -427,12 +423,12 @@ class PRCACAwards(object):
                     else:
                         p['CategoryPlacing'] = placing
                 placing += len(placegetters)
-        return sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+        self.AggPointsTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
 
     def Improvement25(self, Strokename):
         from datetime import datetime, timedelta
         improve25 = PRCACAwards.config['25Improvement']
-        promotetimespan = datetime.strptime(improve25['ProgressTimes'][Strokename], TimePatterns(improve25['ProgressTimes'][Strokename]))
+        promotetimespan = timedelta(seconds=ToSeconds(improve25['ProgressTimes'][Strokename]))
         outputlist = []
         meetdates = []
         for v in self.data.values():
@@ -450,7 +446,7 @@ class PRCACAwards(object):
                     meet25 = [m for m in self.data[swmr][f"{Strokename}25"] if m['Date'] == meet]
                     if meet25 != []:
                         try:
-                            meet25span = datetime.strptime(meet25[0]['Time'], TimePatterns(meet25[0]['Time']))
+                            meet25span = timedelta(seconds=ToSeconds(meet25[0]['Time']))
                         except:
                             continue
                         if not first25span:
@@ -479,7 +475,7 @@ class PRCACAwards(object):
                     fastest50 = None
                     for meet in events50:
                         try:
-                            meet50span = datetime.strptime(meet['Time'], TimePatterns(meet['Time']))
+                            meet50span = timedelta(seconds=ToSeconds(meet['Time']))
                         except:
                             continue
                         if not fastest50:
@@ -488,13 +484,11 @@ class PRCACAwards(object):
                         elif meet50span < fastest50span:
                             fastest50span = meet50span
                             fastest50date = meet['Date']
-                    zerospan = datetime.strptime('0', TimePatterns('0'))
-                    halved50 = (fastest50span - zerospan) / 2
-                    if halved50 < (fastest25span - zerospan):
+                    halved50 = fastest50span / 2
+                    if halved50 < fastest25span:
                         str25of50 = str(halved50.total_seconds())
-                        span25of50 = datetime.strptime(str25of50, TimePatterns(str25of50))
                         obj[fastest50date] = f"{str25of50} (50m)"
-                        fastestspan = span25of50
+                        fastestspan = halved50
                         fastesttimestr = str25of50
                         fastestmeetdate = fastest50date
                 improvement = str((fastestspan - first25span).total_seconds())
@@ -503,7 +497,199 @@ class PRCACAwards(object):
                 obj['FastestMeetDate'] = fastestmeetdate
                 obj['TimeImprovement'] = improvement
                 outputlist.append(obj)
-        return (sorted(outputlist, key = lambda x: x['TimeImprovement']))
+        self.Improvement25Trophy = {}
+        self.Improvement25Trophy[Strokename] = (sorted(outputlist, key = lambda x: x['TimeImprovement']))
+
+    def IM(self):
+        im = PRCACAwards.config['IM']
+        events = [f"IM{d}" for d in im['Distances']]
+        outputlist = []
+        for swmr in self.data.keys():
+            strokes = [i for i in self.data[swmr].keys() if i in events]
+            if strokes != []:
+                agelist = []
+                finalpoints = 0
+                obj = {
+                    'Swimmer': swmr,
+                    'Age': None,
+                    'Category': None,
+                    'CategoryPlacing': None
+                }
+                for evt in events:
+                    if evt in strokes:
+                        strokepoints = sum([e['Points'] for e in self.data[swmr][evt] if isinstance(e['Points'],int)])
+                        strokeage = max([e['Age'] for e in self.data[swmr][evt] if isinstance(e['Age'],int)])
+                        obj[evt] = strokepoints
+                        finalpoints += strokepoints
+                        agelist.append(strokeage)
+                    else:
+                        obj[evt] = None
+                cat = [k for k, v in im['AgeRanges'].items() if max(agelist) in v]
+                obj['Age'] = max(agelist)
+                obj['Category'] = cat[0]
+                obj['TotalPoints'] = finalpoints
+                outputlist.append(obj)
+        for cat in im['AgeRanges'].keys():
+                placing = 1
+                CatSwmrs = [i for i in outputlist if i['Category'] == cat]
+                catpoints = sorted(set([i['TotalPoints'] for i in CatSwmrs]),reverse=True)
+                for i in catpoints:
+                    placegetters = [c for c in CatSwmrs if c['TotalPoints'] == i]
+                    for p in placegetters:
+                        p['CategoryPlacing'] = placing
+                    placing += len(placegetters)
+        self.IMTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+
+    def Pinetathlon(self):
+        from datetime import timedelta
+        pinetathlon = PRCACAwards.config['Pinetathlon']
+        outputlist = []
+        allevents = []
+        for i in pinetathlon['Events'].values():
+            allevents.extend(i)
+        pinestrokes = set(allevents)
+        for swmr, strokes in self.data.items():
+            ages = []
+            for stroke in strokes.values():
+                ages.append(max([m['Age'] for m in stroke]))
+            swmrage = max(ages)
+            rangename = [k for k, v in pinetathlon['AgeRanges'].items() if swmrage in v][0]
+            swmrpineevents = [s for s in strokes.keys() if s in pinetathlon['Events'][rangename]]
+            if len(swmrpineevents) == len(pinetathlon['Events'][rangename]):
+                totaltime = timedelta(seconds=0)
+                obj = {
+                    'Swimmer': swmr,
+                    'Age': swmrage,
+                    'Category': rangename,
+                    'CategoryPlacing': None
+                }
+                for stroke in pinestrokes:
+                    if stroke in swmrpineevents:
+                        stroketimes = []
+                        stroketimes.extend([timedelta(seconds=ToSeconds(m['Time'])) for m in self.data[swmr][stroke] if m['Time'] != 'DQ'])
+                        fastesttime = min(stroketimes)
+                        totaltime += fastesttime
+                        obj[stroke] = str(fastesttime).lstrip('0:').rstrip('0000')
+                    else:
+                        obj[stroke] = None
+                obj['TotalTime'] = str(totaltime).lstrip('0:').rstrip('0000')
+                outputlist.append(obj)
+        for cat in pinetathlon['AgeRanges'].keys():
+            placing = 1
+            CatSwmrs = [i for i in outputlist if i['Category'] == cat]
+            cattimes = sorted(set([timedelta(seconds=ToSeconds(i['TotalTime'])) for i in CatSwmrs]))
+            for i in cattimes:
+                placegetters = [c for c in CatSwmrs if timedelta(seconds=ToSeconds(c['TotalTime'])) == i]
+                for p in placegetters:
+                    p['CategoryPlacing'] = placing
+                placing += len(placegetters)
+        self.PinetathlonTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+
+    def Distance(self):
+        distance = PRCACAwards.config['Distance']
+        outputlist = []
+        allevents = []
+        for i in distance['Events'].values():
+            if isinstance(i, str):
+                allevents.append(i)
+            elif isinstance(i, list):
+                allevents.extend(i)
+        diststrokes = set(allevents)
+        for swmr, strokes in self.data.items():
+            ages = []
+            for stroke in strokes.values():
+                ages.append(max([m['Age'] for m in stroke]))
+            swmrage = max(ages)
+            rangename = [k for k, v in distance['AgeRanges'].items() if swmrage in v][0]
+            swmrdiststrokes = [s for s in strokes.keys() if s in distance['Events'][rangename]]
+            if swmrdiststrokes != []:
+                finalpoints = 0
+                ages = []
+                for stroke in strokes.values():
+                    ages.append(max([m['Age'] for m in stroke]))
+                swmrage = max(ages)
+                rangename = [k for k, v in distance['AgeRanges'].items() if swmrage in v][0]
+                obj = {
+                    'Swimmer': swmr,
+                    'Age': swmrage,
+                    'Category': rangename,
+                    'CategoryPlacing': None
+                }
+                for ds in diststrokes:
+                    if ds in strokes.keys() and ds in distance['Events'][rangename]:
+                        strokepoints = sum([s['Points'] for s in self.data[swmr][ds] if isinstance(s['Points'], int)])
+                        obj[ds] = strokepoints
+                        finalpoints += strokepoints
+                    else:
+                        obj[ds] = None
+                obj['TotalPoints'] = finalpoints
+                outputlist.append(obj)
+        for cat in distance['AgeRanges'].keys():
+            placing = 1
+            CatSwmrs = [i for i in outputlist if i['Category'] == cat]
+            catpoints = sorted(set([i['TotalPoints'] for i in CatSwmrs]),reverse=True)
+            for i in catpoints:
+                placegetters = [c for c in CatSwmrs if c['TotalPoints'] == i]
+                for p in placegetters:
+                    p['CategoryPlacing'] = placing
+                placing += len(placegetters)
+        self.DistanceTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+
+    def Endurance(self):
+        endurance = PRCACAwards.config['Endurance']
+        outputlist = []
+        for swmr, strokes in self.data.items():
+            ages = []
+            for stroke in strokes.values():
+                ages.append(max([m['Age'] for m in stroke]))
+            swmrage = max(ages)
+            swmrendevents = [e for e in strokes.keys() if e in endurance['Events']]
+            if len(swmrendevents) >= endurance['TopXEvents'] and swmrage >= endurance['MinAge']:
+                TotalPoints = []
+                obj = {
+                    'Swimmer': swmr,
+                    'Age': swmrage,
+                    'Placing': None
+                }
+                for evt in endurance['Events']:
+                    if evt in swmrendevents:
+                        evtpoints = sum([e['Points'] for e in self.data[swmr][evt] if isinstance(e['Points'], int)])
+                        obj[evt] = evtpoints
+                        TotalPoints.append(evtpoints)
+                    else:
+                        obj[evt] = None
+                TotalPoints.remove(min(TotalPoints))
+                obj['TotalPoints'] = sum(TotalPoints)
+                outputlist.append(obj)
+        endpoints = sorted(set([i['TotalPoints'] for i in outputlist]),reverse=True)
+        placing = 1
+        for i in endpoints:
+            placegetters = [s for s in outputlist if s['TotalPoints'] == i]
+            for p in placegetters:
+                p['Placing'] = placing
+            placing += len(placegetters)
+        self.EnduranceTrophy = sorted(outputlist, key = lambda x: x['Placing'])
+    
+    def ClubChampion(self):
+        outputlist = []
+        for swmr, strokes in self.data.items():
+            swmrpoints = []
+            for stroke in strokes.values():
+                swmrpoints.append(sum([e['Points'] for e in stroke if isinstance(e['Points'], int)]))
+            obj = {
+                'Placing': None,
+                'Swimmer': swmr,
+                'TotalPoints': sum(swmrpoints)
+            }
+            outputlist.append(obj)
+        champpoints = sorted(set([i['TotalPoints'] for i in outputlist]),reverse=True)
+        placing = 1
+        for i in champpoints:
+            placegetters = [s for s in outputlist if s['TotalPoints'] == i]
+            for p in placegetters:
+                p['Placing'] = placing
+            placing += len(placegetters)
+        self.ClubChampionTrophy = sorted(outputlist, key = lambda x: x['Placing'])
 
 
 def WriteAwardCsv(awarddata, awardname, csvpath):
@@ -512,5 +698,5 @@ def WriteAwardCsv(awarddata, awardname, csvpath):
         fieldnames = [k for k in awarddata[0].keys()]
         writer = DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        for obj in outputlist:
+        for obj in awarddata:
             writer.writerow(obj)
