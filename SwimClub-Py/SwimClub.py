@@ -101,11 +101,14 @@ class PRCACAwards(object):
             totalseconds = float(timestr)
         return totalseconds
 
-    def __init__(self,csv_path):
+    def __init__(self, SwimClubPath, Season):
         from re import sub
         from csv import DictReader
         from pathlib import Path
+        self.SwimClubPath = SwimClubPath
+        self.Season = Season
         #get the CSV file names from the path
+        csv_path = f'{SwimClubPath}\\Data\\{Season}'
         files = list(Path(csv_path).glob("*.csv"))
         swimmers = {}
         for file in files:
@@ -174,9 +177,9 @@ class PRCACAwards(object):
                 }
                 swimmers[swimmer][eventname].append(obj)
         self.data = swimmers
-
+        
     def ConfirmData(self):
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         #setup config & timedeltas
         enduranceDist = PRCACAwards.config['Endurance']['Events']
         ptsdefs = PRCACAwards.config['Points']
@@ -185,7 +188,7 @@ class PRCACAwards(object):
             timedeltas[cat] = {}
             for lvl in ptsdefs[cat].keys():
                 keystr = f"{lvl[0]}ptTimeDelta"
-                timedeltas[cat][keystr] = timedelta(seconds=ToSeconds(ptsdefs[cat][lvl]))
+                timedeltas[cat][keystr] = timedelta(seconds=(PRCACAwards.ToSeconds(ptsdefs[cat][lvl])))
         #loop through swimmerdata
         for swmr, strokes in self.data.items():
             for stroke, meets in strokes.items():
@@ -201,12 +204,12 @@ class PRCACAwards(object):
                     change = None
                     points = None
                     try:
-                        meettimespan = timedelta(seconds=ToSeconds(meets[i]['Time']))
+                        meettimespan = timedelta(seconds=(PRCACAwards.ToSeconds(meets[i]['Time'])))
                     except:
                         continue
                     if seedtime == None and meets[i]['seedTime'] != 'NT':
                         seedtime = meets[i]['seedTime']
-                        seedtimespan = timedelta(seconds=ToSeconds(seedtime))
+                        seedtimespan = timedelta(seconds=(PRCACAwards.ToSeconds(seedtime)))
                     #else if the carried seedtime is not the same as the current, change it.
                     elif seedtime != None and meets[i]['seedTime'] != seedtime:
                         meets[i]['seedTime'] = seedtime
@@ -217,7 +220,7 @@ class PRCACAwards(object):
                     #1st event?
                     if seedtime == None and meets[i]['seedTime'] == 'NT':
                         seedtime = meets[i]['Time']
-                        seedtimespan = timedelta(seconds=ToSeconds(seedtime))
+                        seedtimespan = timedelta(seconds=(PRCACAwards.ToSeconds(seedtime)))
                         meets[i]['pb'] = 'No'
                         if endurance:
                             points = 4
@@ -255,7 +258,7 @@ class PRCACAwards(object):
                             points = 8
                         meets[i]['pb'] = 'Yes'
                         seedtime = meets[i]['Time']
-                        seedtimespan = timedelta(seconds=ToSeconds(seedtime))
+                        seedtimespan = timedelta(seconds=(PRCACAwards.ToSeconds(seedtime)))
                     else:
                         meets[i]['pb'] = 'No'
                         points = 4
@@ -265,16 +268,38 @@ class PRCACAwards(object):
                         change = f'{change}, Points'
                     meets[i]['Changed'] = change
                     meets[i]['Points'] = points
+                    if change != None:
+                        try:
+                            self.ChangedData
+                        except:
+                            self.ChangedData = []
+                        obj = {
+                            'Swimmer': swmr,
+                            'Event': stroke,
+                            "Date": meets[i]['Date'],
+                            "Age": meets[i]['Age'],
+                            "pb": meets[i]['pb'],
+                            "Time": meets[i]['Time'],
+                            "seedTime": meets[i]['seedTime'],
+                            "Points": points,
+                            "Changed": change
+                        }
+                        self.ChangedData.append(obj)
 
-    def AchievementAwards(self, AwardListLocation = None):
+    def Achievement(self):
         from csv import DictReader
+        from pathlib import Path
         pbnum = PRCACAwards.config['Achievement']['PBsPerAward']
-        try:
-            AwardFile = f"{AwardListLocation}\AwardsList.csv"
-            AwardsList = DictReader(open(AwardFile))
-        except:
+        AwardFile = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\AwardsList.csv'
+        filetest = Path(AwardFile).exists()
+        if filetest:
+            AwardsList = []
+            with open(AwardFile) as csvfile:
+                for line in DictReader(csvfile):
+                    AwardsList.append(line)
+        else:
             AwardsList = None
-        outputobj = {}
+        outputlist = []
         for swimmer, strokes in self.data.items():
             pbtable = {}
             AwardsDue = []
@@ -320,9 +345,10 @@ class PRCACAwards(object):
             if len(AwardsDue) > 0:
                 newawards = ''
                 if AwardsList != None:
-                    for line in AwardsList:
-                        if line['Swimmer'] == swimmer:
-                            swmrawards = line
+                    try:
+                        swmrawards = [line['AchievementAwards'] for line in AwardsList if line['Swimmer'] == swimmer]
+                    except:
+                        swmrawards = ''
                 else:
                     swmrawards = ''
                 for award in AwardsDue:
@@ -330,13 +356,14 @@ class PRCACAwards(object):
                         newawards += award
                     elif award not in swmrawards and newawards != '':
                         newawards += f", {award}"
-                if newawards != None:
-                    outputobj[swimmer] = newawards
-        return outputobj
+                if newawards != '':
+                    outputlist.append({'Swimmer': swimmer, 'AchievementAwards': newawards})
+        self.AchievementAwards = outputlist
     
-    def TowelAwards(self, Strokename, AwardListLocation, StartDate, NumberofWeeks = 4):
+    def Towel(self, Strokename, StartDate, NumberofWeeks = 4):
         from datetime import datetime, timedelta
         from csv import DictReader
+        from pathlib import Path
         towel = PRCACAwards.config['Towel']
         StartList = StartDate.split('/')
         yearstr = f"20{StartList[2]}"
@@ -351,8 +378,8 @@ class PRCACAwards(object):
             events.append(f"{Strokename}{distance}")
         pointslist = []
         outputlist = []
+        AwardFile = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\AwardsList.csv'
         try:
-            AwardFile = f"{AwardListLocation}\AwardsList.csv"
             with open(AwardFile) as csv:
                 AwardsList = DictReader(csv)
                 previousrecips = [i['Swimmer'] for i in AwardsList if i['TowelAwards'] != '']
@@ -380,7 +407,7 @@ class PRCACAwards(object):
                 topswmrs = [i for i in rangeswimmers if i['Points'] == toppoints]
                 for x in topswmrs:
                     outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points']})
-        return outputlist
+        self.TowelAwards = outputlist
 
     def AggPoints(self):
         Aggpoints = PRCACAwards.config['AggregatePoints']
@@ -425,80 +452,84 @@ class PRCACAwards(object):
                 placing += len(placegetters)
         self.AggPointsTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
 
-    def Improvement25(self, Strokename):
-        from datetime import datetime, timedelta
+    def Improvement25(self):
+        from datetime import timedelta
         improve25 = PRCACAwards.config['25Improvement']
-        promotetimespan = timedelta(seconds=ToSeconds(improve25['ProgressTimes'][Strokename]))
-        outputlist = []
         meetdates = []
         for v in self.data.values():
             for i in v.values():
                 meetdates = meetdates + [x['Date'] for x in i]
         meets = sorted(set(meetdates))
-        for swmr, strokes in self.data.items():
-            if f"{Strokename}25" in strokes.keys():
-                obj = {
-                    'Swimmer': swmr,
-                }
-                fastest25span = None
-                first25span = None
-                for meet in meets:
-                    meet25 = [m for m in self.data[swmr][f"{Strokename}25"] if m['Date'] == meet]
-                    if meet25 != []:
-                        try:
-                            meet25span = timedelta(seconds=ToSeconds(meet25[0]['Time']))
-                        except:
-                            continue
-                        if not first25span:
-                            first25Time = meet25[0]['Time']
-                            first25span = meet25span
-                        meet25str = meet25[0]['Time']
-                        obj[meet] = meet25str
-                        if not fastest25span:
-                            fastest25str = meet25str
-                            fastest25span = meet25span
-                            fastestmeetdate = meet25[0]['Date']
-                        elif meet25span < fastest25span:
-                            fastest25str = meet25str
-                            fastest25span = meet25span
-                            fastestmeetdate = meet25[0]['Date']
-                    else:
-                        obj[meet] = None
-                fastestspan = fastest25span
-                fastesttimestr = fastest25str
-                try:
-                    events50 = self.data[swmr][f"{Strokename}50"]
-                    swmr50 = True
-                except KeyError:
-                    swmr50 = False
-                if fastest25span < promotetimespan and swmr50:
-                    fastest50 = None
-                    for meet in events50:
-                        try:
-                            meet50span = timedelta(seconds=ToSeconds(meet['Time']))
-                        except:
-                            continue
-                        if not fastest50:
-                            fastest50span = meet50span
-                            fastest50date = meet['Date']
-                        elif meet50span < fastest50span:
-                            fastest50span = meet50span
-                            fastest50date = meet['Date']
-                    halved50 = fastest50span / 2
-                    if halved50 < fastest25span:
-                        str25of50 = str(halved50.total_seconds())
-                        obj[fastest50date] = f"{str25of50} (50m)"
-                        fastestspan = halved50
-                        fastesttimestr = str25of50
-                        fastestmeetdate = fastest50date
-                improvement = str((fastestspan - first25span).total_seconds())
-                obj['FirstTime'] = first25Time
-                obj['FastestTime'] = fastesttimestr
-                obj['FastestMeetDate'] = fastestmeetdate
-                obj['TimeImprovement'] = improvement
-                outputlist.append(obj)
-        self.Improvement25Trophy = {}
-        self.Improvement25Trophy[Strokename] = (sorted(outputlist, key = lambda x: x['TimeImprovement']))
+        for Strokename in improve25['ProgressTimes'].keys():
+            outputlist = []
+            promotetimespan = timedelta(seconds=(PRCACAwards.ToSeconds(improve25['ProgressTimes'][Strokename])))
+            for swmr, strokes in self.data.items():
+                if f"{Strokename}25" in strokes.keys():
+                    obj = {
+                        'Swimmer': swmr,
+                    }
+                    fastest25span = None
+                    first25span = None
+                    for meet in meets:
+                        meet25 = [m for m in self.data[swmr][f"{Strokename}25"] if m['Date'] == meet]
+                        if meet25 != []:
+                            try:
+                                meet25span = timedelta(seconds=(PRCACAwards.ToSeconds(meet25[0]['Time'])))
+                            except:
+                                continue
+                            if not first25span:
+                                first25Time = meet25[0]['Time']
+                                first25span = meet25span
+                            meet25str = meet25[0]['Time']
+                            obj[meet] = meet25str
+                            if not fastest25span:
+                                fastest25str = meet25str
+                                fastest25span = meet25span
+                                fastestmeetdate = meet25[0]['Date']
+                            elif meet25span < fastest25span:
+                                fastest25str = meet25str
+                                fastest25span = meet25span
+                                fastestmeetdate = meet25[0]['Date']
+                        else:
+                            obj[meet] = None
+                    fastestspan = fastest25span
+                    fastesttimestr = fastest25str
+                    try:
+                        events50 = self.data[swmr][f"{Strokename}50"]
+                        swmr50 = True
+                    except KeyError:
+                        swmr50 = False
+                    if fastest25span < promotetimespan and swmr50:
+                        fastest50 = None
+                        for meet in events50:
+                            try:
+                                meet50span = timedelta(seconds=(PRCACAwards.ToSeconds(meet['Time'])))
+                            except:
+                                continue
+                            if not fastest50:
+                                fastest50span = meet50span
+                                fastest50date = meet['Date']
+                            elif meet50span < fastest50span:
+                                fastest50span = meet50span
+                                fastest50date = meet['Date']
+                        halved50 = fastest50span / 2
+                        if halved50 < fastest25span:
+                            str25of50 = str(halved50.total_seconds())
+                            obj[fastest50date] = f"{str25of50} (50m)"
+                            fastestspan = halved50
+                            fastesttimestr = str25of50
+                            fastestmeetdate = fastest50date
+                    improvement = str((fastestspan - first25span).total_seconds())
+                    obj['FirstTime'] = first25Time
+                    obj['FastestTime'] = fastesttimestr
+                    obj['FastestMeetDate'] = fastestmeetdate
+                    obj['TimeImprovement'] = improvement
+                    outputlist.append(obj)
+            try:
+                self.Improvement25Trophy
+            except:
+                self.Improvement25Trophy = {}
+            self.Improvement25Trophy[Strokename] = (sorted(outputlist, key = lambda x: x['TimeImprovement']))
 
     def IM(self):
         im = PRCACAwards.config['IM']
@@ -566,7 +597,7 @@ class PRCACAwards(object):
                 for stroke in pinestrokes:
                     if stroke in swmrpineevents:
                         stroketimes = []
-                        stroketimes.extend([timedelta(seconds=ToSeconds(m['Time'])) for m in self.data[swmr][stroke] if m['Time'] != 'DQ'])
+                        stroketimes.extend([timedelta(seconds=(PRCACAwards.ToSeconds(m['Time']))) for m in self.data[swmr][stroke] if m['Time'] != 'DQ'])
                         fastesttime = min(stroketimes)
                         totaltime += fastesttime
                         obj[stroke] = str(fastesttime).lstrip('0:').rstrip('0000')
@@ -577,9 +608,9 @@ class PRCACAwards(object):
         for cat in pinetathlon['AgeRanges'].keys():
             placing = 1
             CatSwmrs = [i for i in outputlist if i['Category'] == cat]
-            cattimes = sorted(set([timedelta(seconds=ToSeconds(i['TotalTime'])) for i in CatSwmrs]))
+            cattimes = sorted(set([timedelta(seconds=(PRCACAwards.ToSeconds(i['TotalTime']))) for i in CatSwmrs]))
             for i in cattimes:
-                placegetters = [c for c in CatSwmrs if timedelta(seconds=ToSeconds(c['TotalTime'])) == i]
+                placegetters = [c for c in CatSwmrs if timedelta(seconds=(PRCACAwards.ToSeconds(c['TotalTime']))) == i]
                 for p in placegetters:
                     p['CategoryPlacing'] = placing
                 placing += len(placegetters)
@@ -690,13 +721,97 @@ class PRCACAwards(object):
                 p['Placing'] = placing
             placing += len(placegetters)
         self.ClubChampionTrophy = sorted(outputlist, key = lambda x: x['Placing'])
+    
+    def UpdateAwardsList(self, Award):
+        from csv import DictReader
+        from pathlib import Path
+        if Award == 'AchievementAwards':
+            newData = self.AchievementAwards
+        elif Award == 'TowelAwards':
+            newData = self.TowelAwards
+        csvdata = []
+        csvpath = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\AwardsList.csv'
+        pathtest = Path(csvpath).exists()
+        if pathtest:
+            with open(csvpath) as csvfile:
+                for line in DictReader(csvfile):
+                    csvdata.append(line)
+        for nd in newData:
+            try:
+                obj = [r for r in csvdata if r['Swimmer'] == nd['Swimmer']][0]
+            except:
+                obj = {
+                    'Swimmer': nd['Swimmer'],
+                    'AchievementAwards': '',
+                    'TowelAwards': ''
+                }
+                csvdata.append(obj)
+            #Achievement Awards
+            try:
+                test = nd['AchievementAwards']
+                achawrd = True
+            except KeyError:
+                achawrd = False
+            if obj['AchievementAwards'] != '' and achawrd:
+                obj['AchievementAwards'] += f", {nd['AchievementAwards']}"
+            elif achawrd:
+                obj['AchievementAwards'] = nd['AchievementAwards']
+            #Towel Awards
+            try:
+                test = nd['AwardStroke']
+                twlawrd = True
+            except KeyError:
+                twlawrd = False
+            if twlawrd:
+                obj['TowelAwards'] = nd['AwardStroke']
+        self.AwardsList = csvdata
 
-
-def WriteAwardCsv(awarddata, awardname, csvpath):
-    from csv import DictWriter
-    with open(f"{csvpath}\\{awardname}.csv", 'w', newline='') as csvfile:
-        fieldnames = [k for k in awarddata[0].keys()]
-        writer = DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for obj in awarddata:
-            writer.writerow(obj)
+    def WriteAwardCsv(self, awardname):
+        from csv import DictWriter
+        from datetime import datetime
+        from pathlib import Path
+        from shutil import move
+        today = datetime.now().strftime("%y%m%d")
+        if awardname in ['AchievementAwards', 'TowelAwards']:
+            rewardtype = 'Award'
+        elif awardname == 'AggPointsTrophy':
+            awarddata = self.AggPointsTrophy
+            rewardtype = 'Trophy'
+        elif awardname == 'Improvement25Trophy':
+            awarddata = self.Improvement25Trophy
+            rewardtype = 'Trophy'
+        elif awardname == 'IMTrophy':
+            awarddata = self.IMTrophy
+            rewardtype = 'Trophy'
+        elif awardname == 'DistanceTrophy':
+            awarddata = self.DistanceTrophy
+            rewardtype = 'Trophy'
+        elif awardname == 'PinetathlonTrophy':
+            awarddata = self.PinetathlonTrophy
+            rewardtype = 'Trophy'
+        elif awardname == 'EnduranceTrophy':
+            awarddata = self.EnduranceTrophy
+            rewardtype = 'Trophy'
+        elif awardname == 'ClubChampionTrophy':
+            awarddata = self.ClubChampionTrophy
+            rewardtype = 'Trophy'
+        if rewardtype == 'Award':
+            awarddata = self.AwardsList
+            csvpath = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\AwardsList.csv'
+            backuploc = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\_HistoricalAwardsLists\\AwardsList_{today}.csv'
+        elif rewardtype == 'Trophy':
+            csvpath = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\Trophies\\{awardname}.csv'
+            backuploc = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\Trophies\\{awardname}_{today}.csv'
+        filetest = Path(csvpath).exists()
+        backuptest = Path(backuploc).exists()
+        if filetest and backuptest:
+            Path(backuploc).unlink()
+            move(csvpath, backuploc)
+        elif filetest:
+            move(csvpath, backuploc)
+        with open(csvpath, 'w', newline='') as csvfile:
+            fieldnames = [k for k in awarddata[0].keys()]
+            writer = DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for obj in awarddata:
+                writer.writerow(obj)
