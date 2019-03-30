@@ -101,14 +101,17 @@ class PRCACAwards(object):
             totalseconds = float(timestr)
         return totalseconds
 
-    def __init__(self, SwimClubPath, Season):
+    def __init__(self, Season):
+        SwimClubPath = 
         from re import sub
         from csv import DictReader
         from pathlib import Path
         self.SwimClubPath = SwimClubPath
         self.Season = Season
+        self.Trophies = {}
+        self.Awards = {}
         #get the CSV file names from the path
-        csv_path = f'{SwimClubPath}\\Data\\{Season}'
+        csv_path = f'{SwimClubPath}\\{Season}\\Data'
         files = list(Path(csv_path).glob("*.csv"))
         swimmers = {}
         for file in files:
@@ -290,7 +293,7 @@ class PRCACAwards(object):
         from csv import DictReader
         from pathlib import Path
         pbnum = PRCACAwards.config['Achievement']['PBsPerAward']
-        AwardFile = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\AwardsList.csv'
+        AwardFile = f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\AwardsList.csv'
         filetest = Path(AwardFile).exists()
         if filetest:
             AwardsList = []
@@ -303,12 +306,15 @@ class PRCACAwards(object):
         for swimmer, strokes in self.data.items():
             pbtable = {}
             AwardsDue = []
+            dates = []
             for stroke, meets in strokes.items():
                 pbcount = 0
                 for meet in meets:
+                    dates.append(meet['Date'])
                     if meet['pb'] == 'Yes':
                         pbcount += 1
                 pbtable[stroke] = pbcount
+            
             for stroke, pbs in pbtable.items():
                 # set the pb number
                 totalpbs = pbs
@@ -357,8 +363,8 @@ class PRCACAwards(object):
                     elif award not in swmrawards and newawards != '':
                         newawards += f", {award}"
                 if newawards != '':
-                    outputlist.append({'Swimmer': swimmer, 'AchievementAwards': newawards})
-        self.AchievementAwards = outputlist
+                    outputlist.append({'Swimmer': swimmer, 'AchievementAwards': newawards, 'Date': max(dates)})
+        self.Awards['Achievement'] = outputlist
     
     def Towel(self, Strokename, StartDate, NumberofWeeks = 4):
         from datetime import datetime, timedelta
@@ -378,7 +384,7 @@ class PRCACAwards(object):
             events.append(f"{Strokename}{distance}")
         pointslist = []
         outputlist = []
-        AwardFile = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\AwardsList.csv'
+        AwardFile = f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\AwardsList.csv'
         try:
             with open(AwardFile) as csv:
                 AwardsList = DictReader(csv)
@@ -393,12 +399,12 @@ class PRCACAwards(object):
                 points = 0
                 agelist = []
                 for evt in swmrevents:
-                    agelist.append(max(i['Age'] for i in strokes[evt]))
                     for meet in strokes[evt]:
                         if meet['Points'] != None and meet['Date'] in filters:
                             points += meet['Points']
-                swmrage = int(max(agelist))
+                            agelist.append(meet['Age'])
                 if points >= towel['MinPoints']:
+                    swmrage = max(agelist)
                     pointslist.append({'Swimmer': swmr, 'Age': swmrage, 'Points': points})
         for rangename, agesinrange in towel['AgeRanges'].items():
             rangeswimmers = [i for i in pointslist if i['Age'] in agesinrange]
@@ -406,8 +412,8 @@ class PRCACAwards(object):
                 toppoints = max(i['Points'] for i in rangeswimmers)
                 topswmrs = [i for i in rangeswimmers if i['Points'] == toppoints]
                 for x in topswmrs:
-                    outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points']})
-        self.TowelAwards = outputlist
+                    outputlist.append({'AgeGroup': rangename, 'Swimmer': x['Swimmer'], 'Points': x['Points'], 'Stroke': Strokename})
+        self.Awards['Towel'] = outputlist
 
     def AggPoints(self):
         Aggpoints = PRCACAwards.config['AggregatePoints']
@@ -450,7 +456,7 @@ class PRCACAwards(object):
                     else:
                         p['CategoryPlacing'] = placing
                 placing += len(placegetters)
-        self.AggPointsTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+        self.Trophies['AggPoints'] = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
 
     def Improvement25(self):
         from datetime import timedelta
@@ -519,17 +525,13 @@ class PRCACAwards(object):
                             fastestspan = halved50
                             fastesttimestr = str25of50
                             fastestmeetdate = fastest50date
-                    improvement = str((fastestspan - first25span).total_seconds())
+                    improvement = float((fastestspan - first25span).total_seconds())
                     obj['FirstTime'] = first25Time
                     obj['FastestTime'] = fastesttimestr
                     obj['FastestMeetDate'] = fastestmeetdate
                     obj['TimeImprovement'] = improvement
                     outputlist.append(obj)
-            try:
-                self.Improvement25Trophy
-            except:
-                self.Improvement25Trophy = {}
-            self.Improvement25Trophy[Strokename] = (sorted(outputlist, key = lambda x: x['TimeImprovement']))
+            self.Trophies[f'{Strokename}25'] = (sorted(outputlist, key = lambda x: x['TimeImprovement']))
 
     def IM(self):
         im = PRCACAwards.config['IM']
@@ -569,7 +571,7 @@ class PRCACAwards(object):
                     for p in placegetters:
                         p['CategoryPlacing'] = placing
                     placing += len(placegetters)
-        self.IMTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+        self.Trophies['IM'] = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
 
     def Pinetathlon(self):
         from datetime import timedelta
@@ -582,7 +584,7 @@ class PRCACAwards(object):
         for swmr, strokes in self.data.items():
             ages = []
             for stroke in strokes.values():
-                ages.append(max([m['Age'] for m in stroke]))
+                ages.append(max([m['Age'] for m in stroke if isinstance(m['Age'], int)]))
             swmrage = max(ages)
             rangename = [k for k, v in pinetathlon['AgeRanges'].items() if swmrage in v][0]
             swmrpineevents = [s for s in strokes.keys() if s in pinetathlon['Events'][rangename]]
@@ -614,7 +616,7 @@ class PRCACAwards(object):
                 for p in placegetters:
                     p['CategoryPlacing'] = placing
                 placing += len(placegetters)
-        self.PinetathlonTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+        self.Trophies['Pinetathlon'] = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
 
     def Distance(self):
         distance = PRCACAwards.config['Distance']
@@ -629,17 +631,12 @@ class PRCACAwards(object):
         for swmr, strokes in self.data.items():
             ages = []
             for stroke in strokes.values():
-                ages.append(max([m['Age'] for m in stroke]))
+                ages.append(max([m['Age'] for m in stroke if isinstance(m['Age'], int)]))
             swmrage = max(ages)
             rangename = [k for k, v in distance['AgeRanges'].items() if swmrage in v][0]
             swmrdiststrokes = [s for s in strokes.keys() if s in distance['Events'][rangename]]
             if swmrdiststrokes != []:
                 finalpoints = 0
-                ages = []
-                for stroke in strokes.values():
-                    ages.append(max([m['Age'] for m in stroke]))
-                swmrage = max(ages)
-                rangename = [k for k, v in distance['AgeRanges'].items() if swmrage in v][0]
                 obj = {
                     'Swimmer': swmr,
                     'Age': swmrage,
@@ -664,7 +661,7 @@ class PRCACAwards(object):
                 for p in placegetters:
                     p['CategoryPlacing'] = placing
                 placing += len(placegetters)
-        self.DistanceTrophy = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
+        self.Trophies['Distance'] = sorted(outputlist, key = lambda x: (x['Category'], x['CategoryPlacing']))
 
     def Endurance(self):
         endurance = PRCACAwards.config['Endurance']
@@ -672,7 +669,7 @@ class PRCACAwards(object):
         for swmr, strokes in self.data.items():
             ages = []
             for stroke in strokes.values():
-                ages.append(max([m['Age'] for m in stroke]))
+                ages.append(max([m['Age'] for m in stroke if isinstance(m['Age'], int)]))
             swmrage = max(ages)
             swmrendevents = [e for e in strokes.keys() if e in endurance['Events']]
             if len(swmrendevents) >= endurance['TopXEvents'] and swmrage >= endurance['MinAge']:
@@ -699,7 +696,7 @@ class PRCACAwards(object):
             for p in placegetters:
                 p['Placing'] = placing
             placing += len(placegetters)
-        self.EnduranceTrophy = sorted(outputlist, key = lambda x: x['Placing'])
+        self.Trophies['Endurance'] = sorted(outputlist, key = lambda x: x['Placing'])
     
     def ClubChampion(self):
         outputlist = []
@@ -720,98 +717,138 @@ class PRCACAwards(object):
             for p in placegetters:
                 p['Placing'] = placing
             placing += len(placegetters)
-        self.ClubChampionTrophy = sorted(outputlist, key = lambda x: x['Placing'])
+        self.Trophies['ClubChampion'] = sorted(outputlist, key = lambda x: x['Placing'])
     
-    def UpdateAwardsList(self, Award):
+    def UpdateAwardsList(self):
         from csv import DictReader
         from pathlib import Path
-        if Award == 'AchievementAwards':
-            newData = self.AchievementAwards
-        elif Award == 'TowelAwards':
-            newData = self.TowelAwards
         csvdata = []
-        csvpath = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\AwardsList.csv'
+        csvpath = f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\AwardsList.csv'
         pathtest = Path(csvpath).exists()
         if pathtest:
             with open(csvpath) as csvfile:
                 for line in DictReader(csvfile):
                     csvdata.append(line)
-        for nd in newData:
-            try:
-                obj = [r for r in csvdata if r['Swimmer'] == nd['Swimmer']][0]
-            except:
-                obj = {
-                    'Swimmer': nd['Swimmer'],
-                    'AchievementAwards': '',
-                    'TowelAwards': ''
-                }
-                csvdata.append(obj)
-            #Achievement Awards
-            try:
-                test = nd['AchievementAwards']
-                achawrd = True
-            except KeyError:
-                achawrd = False
-            if obj['AchievementAwards'] != '' and achawrd:
-                obj['AchievementAwards'] += f", {nd['AchievementAwards']}"
-            elif achawrd:
-                obj['AchievementAwards'] = nd['AchievementAwards']
-            #Towel Awards
-            try:
-                test = nd['AwardStroke']
-                twlawrd = True
-            except KeyError:
-                twlawrd = False
-            if twlawrd:
-                obj['TowelAwards'] = nd['AwardStroke']
+        for k, newData in self.Awards.items():
+            for nd in newData:
+                try:
+                    obj = [r for r in csvdata if r['Swimmer'] == nd['Swimmer']][0]
+                except:
+                    obj = {
+                        'Swimmer': nd['Swimmer'],
+                        'AchievementAwards': '',
+                        'TowelAwards': ''
+                    }
+                    csvdata.append(obj)
+                #Achievement Awards
+                if k == 'Achievement':
+                    if obj['AchievementAwards'] != '':
+                        obj['AchievementAwards'] += f", {nd['AchievementAwards']}"
+                    else:
+                        obj['AchievementAwards'] = nd['AchievementAwards']
+                #Towel Awards
+                elif k == 'Towel':
+                    obj['TowelAwards'] = nd['Stroke']
         self.AwardsList = csvdata
+    
+    def SwimmersEvents(self, Swimmer):
+        outputlist = []
+        for evt, meets in self.data[Swimmer].items():
+            for meet in meets:
+                obj = {
+                    'Swimmer': Swimmer,
+                    'Event': evt,
+                    'Date': meet['Date'],
+                    'Age': meet['Age'],
+                    'pb': meet['pb'],
+                    'Time': meet['Time'],
+                    'seedTime': meet['seedTime'],
+                    'Points': meet['Points'],
+                    'Changed': meet['Changed']
+                }
+                outputlist.append(obj)
+        try:
+            self.swimmers[Swimmer] = sorted(outputlist, key = lambda x: (x['Event'], x['Date']))
+        except:
+            self.swimmers = {}
+            self.swimmers[Swimmer] = sorted(outputlist, key = lambda x: (x['Event'], x['Date']))
+        for line in self.swimmers[Swimmer]:
+            print(line)
+    
+    def ExcelData(self, Swimmer):
+        swimmername = f'Swenson, {Swimmer}'
+        outputlist = []
+        meetlist = []
+        for meets in self.data[swimmername].values():
+           meetlist.extend([i['Date'] for i in meets])
+        meetdates = sorted(set(meetlist))
+        for md in meetdates:
+            obj = {'Date': md}   
+            for evt, meets in self.data[swimmername].items():
+                obj[evt] = None
+                meetdata = [meet for meet in meets if meet['Date'] == md]
+                if meetdata != []:
+                    obj[evt] = meetdata[0]['Time']
+            outputlist.append(obj)
+        return outputlist
 
-    def WriteAwardCsv(self, awardname):
+    def WriteAwardCsv(self):
         from csv import DictWriter
         from datetime import datetime
         from pathlib import Path
         from shutil import move
         today = datetime.now().strftime("%y%m%d")
-        if awardname in ['AchievementAwards', 'TowelAwards']:
-            rewardtype = 'Award'
-        elif awardname == 'AggPointsTrophy':
-            awarddata = self.AggPointsTrophy
-            rewardtype = 'Trophy'
-        elif awardname == 'Improvement25Trophy':
-            awarddata = self.Improvement25Trophy
-            rewardtype = 'Trophy'
-        elif awardname == 'IMTrophy':
-            awarddata = self.IMTrophy
-            rewardtype = 'Trophy'
-        elif awardname == 'DistanceTrophy':
-            awarddata = self.DistanceTrophy
-            rewardtype = 'Trophy'
-        elif awardname == 'PinetathlonTrophy':
-            awarddata = self.PinetathlonTrophy
-            rewardtype = 'Trophy'
-        elif awardname == 'EnduranceTrophy':
-            awarddata = self.EnduranceTrophy
-            rewardtype = 'Trophy'
-        elif awardname == 'ClubChampionTrophy':
-            awarddata = self.ClubChampionTrophy
-            rewardtype = 'Trophy'
-        if rewardtype == 'Award':
-            awarddata = self.AwardsList
-            csvpath = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\AwardsList.csv'
-            backuploc = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\_HistoricalAwardsLists\\AwardsList_{today}.csv'
-        elif rewardtype == 'Trophy':
-            csvpath = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\Trophies\\{awardname}.csv'
-            backuploc = f'{self.SwimClubPath}\\ClubAwards\\{self.Season}\\Trophies\\{awardname}_{today}.csv'
-        filetest = Path(csvpath).exists()
-        backuptest = Path(backuploc).exists()
-        if filetest and backuptest:
-            Path(backuploc).unlink()
-            move(csvpath, backuploc)
-        elif filetest:
-            move(csvpath, backuploc)
-        with open(csvpath, 'w', newline='') as csvfile:
-            fieldnames = [k for k in awarddata[0].keys()]
-            writer = DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            for obj in awarddata:
-                writer.writerow(obj)
+        try:
+            awards = self.AwardsList
+        except:
+            awards = False
+        try:
+            trophies = self.Trophies.keys()
+        except:
+            trophies = False
+        writelist = []
+        if awards:
+            obj = {
+                'awarddata': self.AwardsList,
+                'csvpath': f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\AwardsList.csv',
+                'backuploc': f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\_HistoricalAwardsLists\\AwardsList_{today}.csv'
+            }
+            writelist.append(obj)
+        if trophies:
+            for trophy in trophies:
+                obj = {
+                    'awarddata': self.Trophies[trophy],
+                    'csvpath': f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\Trophies\\{trophy}.csv',
+                    'backuploc': f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\Trophies\\{trophy}_{today}.csv'
+                }
+                writelist.append(obj)
+        for i in writelist:
+            filetest = Path(i['csvpath']).exists()
+            backuptest = Path(i['backuploc']).exists()
+            if filetest and backuptest:
+                Path(i['csvpath']).unlink()
+            elif filetest:
+                move(i['csvpath'], i['backuploc'])
+            with open(i['csvpath'], 'w', newline='') as csvfile:
+                fieldnames = [k for k in i['awarddata'][0].keys()]
+                writer = DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                for obj in i['awarddata']:
+                    writer.writerow(obj)
+
+    def WriteAwardList(self):
+        from datetime import datetime
+        for award, swimmers in self.Awards.items():
+            data = ''
+            if award == 'Achievement':
+                swimdate = max([i['Date'] for i in self.Awards[award]])
+                listpath = f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\AchievementAwards\\Achievement_{swimdate}.txt'
+                for s in swimmers:
+                    data += f"\n{s['Swimmer']}\t-\t{s['AchievementAwards']}"
+            elif award == 'Towel':
+                stroke = self.Awards['Towel'][0]['Stroke']
+                listpath = f'{self.SwimClubPath}\\{self.Season}\\ClubAwards\\TowelAwards\\{stroke}.txt'
+                for s in swimmers:
+                    data += f"\n{s['AgeGroup']}\t-\t{s['Swimmer']}\t-\t{s['Points']}"
+            with open(listpath, 'w') as file:
+                file.write(data)
