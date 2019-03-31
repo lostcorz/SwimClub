@@ -790,7 +790,11 @@ class PRCACAwards(object):
                 if meetdata != []:
                     obj[evt] = meetdata[0]['Time']
             outputlist.append(obj)
-        return outputlist
+        try:
+            self.Swensons[Swimmer] = outputlist
+        except:
+            self.Swensons = {}
+            self.Swensons[Swimmer] = outputlist
 
     def WriteAwardCsv(self):
         from csv import DictWriter
@@ -852,3 +856,23 @@ class PRCACAwards(object):
                     data += f"\n{s['AgeGroup']}\t-\t{s['Swimmer']}\t-\t{s['Points']}"
             with open(listpath, 'w') as file:
                 file.write(data)
+    
+    def WriteSwensonCsv(self):
+        from csv import DictWriter
+        from pathlib import Path
+        for k in self.Swensons.keys():
+            obj = {
+                'awarddata': self.Swensons[k],
+                'csvpath': f'C:\\Temp\\{k}.csv',
+            }
+            writelist.append(obj)
+        for i in writelist:
+            filetest = Path(i['csvpath']).exists()
+            if filetest:
+                Path(i['csvpath']).unlink()
+            with open(i['csvpath'], 'w', newline='') as csvfile:
+                fieldnames = [k for k in i['awarddata'][0].keys()]
+                writer = DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                for obj in i['awarddata']:
+                    writer.writerow(obj)
