@@ -271,6 +271,26 @@ class PRCACAwards(object):
                         change = f'{change}, Points'
                     meets[i]['Changed'] = change
                     meets[i]['Points'] = points
+                    if 'Swenson,' in swmr:
+                        fn = swmr.split(' ')[1]
+                        try:
+                            swensons
+                        except NameError:
+                            swensons = {}
+                        try:
+                            swensons[fn]
+                        except KeyError:
+                            swensons[fn] = []
+                        swenmeet = [s for s in swensons[fn] if s['Date'] == meets[i]['Date']]
+                        if swenmeet != []:
+                            mi = swensons[fn].index(swenmeet[0])
+                            swensons[fn][mi][stroke] = meets[i]['Time']
+                        else:
+                            obj = {
+                                'Date': meets[i]['Date'],   
+                                stroke: meets[i]['Time']
+                            }
+                            swensons[fn].append(obj)
                     if change != None:
                         try:
                             self.ChangedData
@@ -288,7 +308,9 @@ class PRCACAwards(object):
                             "Changed": change
                         }
                         self.ChangedData.append(obj)
-
+        if swensons:
+            self.Swensons = swensons
+    
     def Achievement(self):
         from csv import DictReader
         from pathlib import Path
@@ -774,27 +796,6 @@ class PRCACAwards(object):
             self.swimmers[Swimmer] = sorted(outputlist, key = lambda x: (x['Event'], x['Date']))
         for line in self.swimmers[Swimmer]:
             print(line)
-    
-    def ExcelData(self, Swimmer):
-        swimmername = f'Swenson, {Swimmer}'
-        outputlist = []
-        meetlist = []
-        for meets in self.data[swimmername].values():
-           meetlist.extend([i['Date'] for i in meets])
-        meetdates = sorted(set(meetlist))
-        for md in meetdates:
-            obj = {'Date': md}   
-            for evt, meets in self.data[swimmername].items():
-                obj[evt] = None
-                meetdata = [meet for meet in meets if meet['Date'] == md]
-                if meetdata != []:
-                    obj[evt] = meetdata[0]['Time']
-            outputlist.append(obj)
-        try:
-            self.Swensons[Swimmer] = outputlist
-        except:
-            self.Swensons = {}
-            self.Swensons[Swimmer] = outputlist
 
     def WriteAwardCsv(self):
         from csv import DictWriter
@@ -860,6 +861,7 @@ class PRCACAwards(object):
     def WriteSwensonCsv(self):
         from csv import DictWriter
         from pathlib import Path
+        writelist = []
         for k in self.Swensons.keys():
             obj = {
                 'awarddata': self.Swensons[k],
@@ -871,7 +873,13 @@ class PRCACAwards(object):
             if filetest:
                 Path(i['csvpath']).unlink()
             with open(i['csvpath'], 'w', newline='') as csvfile:
-                fieldnames = [k for k in i['awarddata'][0].keys()]
+                allfields = []
+                for m in i['awarddata']:
+                    allfields.extend(m.keys())
+                fields = set(allfields)
+                fields.remove('Date')
+                fieldnames = sorted(list(fields))
+                fieldnames.insert(0, 'Date')
                 writer = DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
                 for obj in i['awarddata']:
