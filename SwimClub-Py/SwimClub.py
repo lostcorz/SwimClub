@@ -344,7 +344,7 @@ class PRCACAwards(object):
                 if ('50' in stroke):
                     try:
                         pbs25 = pbtable[stroke.replace('50','25')] % pbnum
-                        if pbs25 in range(1,pbnum - 1):
+                        if pbs25 in range(1,pbnum):
                             slash25 = True
                             totalpbs = pbs + pbs25
                         else:
@@ -708,8 +708,8 @@ class PRCACAwards(object):
                         TotalPoints.append(evtpoints)
                     else:
                         obj[evt] = None
-                TotalPoints.remove(min(TotalPoints))
-                obj['TotalPoints'] = sum(TotalPoints)
+                finalPoints = sorted(TotalPoints,reverse=True)[:endurance['TopXEvents']]
+                obj['TotalPoints'] = sum(finalPoints)
                 outputlist.append(obj)
         endpoints = sorted(set([i['TotalPoints'] for i in outputlist]),reverse=True)
         placing = 1
@@ -864,7 +864,7 @@ class PRCACAwards(object):
         writelist = []
         for k in self.Swensons.keys():
             obj = {
-                'awarddata': self.Swensons[k],
+                'awarddata': sorted(self.Swensons[k],key = lambda x: x['Date']),
                 'csvpath': f'C:\\Temp\\{k}.csv',
             }
             writelist.append(obj)
