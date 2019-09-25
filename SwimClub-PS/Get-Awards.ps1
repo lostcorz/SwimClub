@@ -1,5 +1,6 @@
-﻿$SwimClubPath = "C:\Temp"
-#Import-Module "$SwimClubPath\Powershell\Swim.Club.psm1" -Force
+﻿$SwimDataPath = "C:\Temp"
+$GoogleDrivePath = 
+#Import-Module "$SwimDataPath\Powershell\Swim.Club.psm1" -Force
 $date = get-date
 $month = $date.Month
 $year = [int]($date.ToString('yy'))
@@ -10,17 +11,22 @@ else {
     $season = "$($year-1).$($year)"
 }
 Clear-Host
-$seasoninput = Read-Host -Prompt "Which swim season?`nEnter the season (in 'yy.yy' format) and press [Enter], or just [Enter] for season $season"
-if (-not $seasoninput) {
-    $seasoninput = $season
+do {
+    $seasoninput = Read-Host -Prompt "Which swim season?`nEnter the season (in 'yy.yy' format) and press [Enter], or just [Enter] for season $season"
+    if (-not $seasoninput) {
+        $seasoninput = $season
+    }
 }
-$RootPath = "$($SwimClubPath)\$($seasoninput)"
-$DataPath = "$($RootPath)\AwardData"
-$ResultsPath = "$($RootPath)\ClubAwards"
+until ($seasoninput -like "??.??")
+$DataPath = "$($SwimDataPath)\$($seasoninput)\AwardData"
+$ResultsPath = "$($GoogleDrivePath)\$($seasoninput)\ClubAwards"
 Clear-Host
 #$cleandata = get-swimmerdata $DataPath -Verbose | Confirm-SwimmerData -verbose
 Write-host "Data imported `n"
-$awardinput = Read-Host -Prompt "Which Awards to report on?`n[1] Achievement Awards`n[2] Towel Awards`n[3] End Of Season Trophies`nEnter 1, 2 or 3, then press [Enter]"
+do {
+    $awardinput = Read-Host -Prompt "Which Awards to report on?`n[1] Achievement Awards`n[2] Towel Awards`n[3] End Of Season Trophies`nEnter 1, 2 or 3, then press [Enter]"
+}
+until ($awardinput -in (1..3))
 switch ($awardinput) {
     "1" {
         if (Test-Path "$($ResultsPath)\AwardsList.csv") {
@@ -57,9 +63,29 @@ switch ($awardinput) {
     }
     "2" {
         clear-host
-        $startDate = Read-Host -Prompt "First club night date for the 4 week period?`nEnter the date of the first club night in dd/mm/yy format, the press [Enter]"
         do {
-            $Strokename = read-host -prompt "Which stroke to report on?`nEnter Backstroke, Breaststroke, Butterfly or Freestyle, then press [Enter]"
+            $startDate = Read-Host -Prompt "First club night date for the 4 week period?`nEnter the date of the first club night in dd/mm/yy format, the press [Enter]"
+        }
+        until ($startDate -like "??/??/??")
+        do {
+            do {
+                $strokeinput = read-host -prompt "Which stroke to report on?`n[1] Backstroke`n[2] Breaststroke`n[3] Butterfly`n[4] Freestyle`nEnter 1, 2, 3 or 4, then press [Enter]"
+            }
+            until ($strokeinput -in (1..4))
+            switch ($strokeinput) {
+                "1" {
+                    $Strokename = 'Backstroke'
+                }
+                "2" {
+                    $Strokename = 'Breaststroke'
+                }
+                "3" {
+                    $Strokename = 'Butterfly'
+                }
+                "4" {
+                    $Strokename = 'Freestyle'
+                }
+            }
             #$newawards = Get-TowelAwards $cleandata -Stroke $Strokename -FirstClubNight $StartDate -AwardsListLocation $ResultsPath -numberofweeks 4
             clear-host
             write-host "The award winners are:"
