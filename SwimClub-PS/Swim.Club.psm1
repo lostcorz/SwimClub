@@ -891,20 +891,52 @@ function Get-EnduranceTrophies {
 function Get-ClubChampion {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true,Position=0)]$SwimmerData
+        [Parameter(Mandatory=$true,Position=0)]$SwimmerData,
+        [Parameter(Mandatory=$true)]$CategoryPath,
+        [Parameter(Mandatory=$true)]$QualTimesPath
     )
     begin {
-        $outputarray = @()
+        $outputarray = Import-Csv $CategoryPath
+        $qualtimes = import-csv $QualTimesPath
     }
     process {
-        foreach ($swimmer in $swimmerdata.Keys) {
-            $swmrpoints = ($swimmerdata.$swimmer.Values.Points | measure -sum).Sum
-            $obj = New-Object psobject -Property @{
-                'Place' = $null
-                'Swimmer' = $swimmer
-                'TotalPoints' = $swmrpoints
+        foreach ($swimmer in $outputarray) {
+            $eligable = $true
+            $swimmer | Add-Member -MemberType NoteProperty -Name Place -Value $null
+            $swmrevents = $SwimmerData[$swimmer.Swimmer]
+            $fastesttimespans = @()
+            $qualtimespans = @()
+            foreach ($evt in $qualtimes) {
+                Write-Host "$($evt.Event)" -ForegroundColor Green
+                if ($evt.Event -in $swmrevents.keys) {
+                    Write-Host "$($evt.Event) in Swimmers Events" -ForegroundColor Green
+                    $stroketimes = @()
+                    foreach ($i in ($swmrevents[($evt.Event)].Time | where {$_ -ne 'DQ'})) {
+                        $stroketimes += [timespan]::ParseExact($i, $timepatterns, [cultureinfo]::CurrentCulture)
+                    }
+                    Write-Host "$($stroketimes.count) in Swimmers Events" -ForegroundColor Green
+                    $fastesttimespan = ($stroketimes | measure -Minimum).Minimum
+                    $fastesttimespans += $fastesttimespan
+                    $qualtime = ($qualtimes | where {$_.event -eq $evt.Event}).($swimmer.Category)
+                    $qualtimespan = [TimeSpan]::FromSeconds($qualtime)
+                    $qualtimespans += $qualtimespan
+                    $percentdif = $fastesttimespan.TotalMilliseconds / $qualtimespan.TotalMilliseconds * 100
+                    $evtpercent = [math]::Round($percentdif,2)
+                    $swimmer | Add-Member -MemberType NoteProperty -Name $evt.Event -Value $evtpercent
+                }
+                else {
+                    $swimmer | Add-Member -MemberType NoteProperty -Name $evt.Event -Value 'N/A'
+                    $eligable = $false
+                }
             }
-            $outputarray += $obj
+            $totalpercentdif = ($fastesttimespans.TotalMilliseconds | measure -Sum).sum / ($qualtimespans.TotalMilliseconds | measure -Sum).sum * 100
+            $finalpercent = [math]::Round($totalpercentdif,2)
+            if ($eligable) {
+                $swimmer | Add-Member -MemberType NoteProperty -Name 'TotalPercentageDif' -Value $finalpercent
+            }
+            else {
+                $swimmer | Add-Member -MemberType NoteProperty -Name 'TotalPercentageDif' -Value 'N/A'
+            }
         }
         $orderedarray = $outputarray | sort TotalPoints -Descending
         foreach ($obj in $orderedarray) {
