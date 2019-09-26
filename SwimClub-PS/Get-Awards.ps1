@@ -198,10 +198,13 @@ do {
             if ($trophyinput -in (7,8)) {
                 $trophies["Club Champion"] = Get-ClubChampion $cleandata -Verbose
             }
+            if (-not(Test-Path "$($ResultsPath)\Trophies")) {
+                New-Item -Name "Trophies" -ItemType Directory -Path $ResultsPath
+            }
             foreach ($Trophy in $trophies.Keys) {
                 $trophies.$Trophy | export-csv "$($ResultsPath)\Trophies\$($Trophy).csv" -NoTypeInformation
             }
-            clear-host
+            #clear-host
             Write-Host "Trophy reports were written to $($ResultsPath)\Trophies"
             do {
                 $returnmenu = Read-Host `
