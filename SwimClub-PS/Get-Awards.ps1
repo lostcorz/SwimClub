@@ -1,45 +1,58 @@
 ﻿# PATH VARIABLES
 #-------------------------------------------
 # Path To Meet Manager CSV Exports
-$SwimDataPath = "C:\Temp\SwimClub"
+$SwimDataPath = "D:\Home\Shaun\OneDrive\Documents\SwimClub\MeetData" #"C:\Users\Pine Rivers P&C\MeetData"
 #-------------------------------------------
 # Path to Google Drive
-$GoogleDrivePath = "C:\Temp\SwimClub\Google"
+$GoogleDrivePath = "D:\Home\Shaun\OneDrive\Documents\SwimClub\GoogleDrive" #"C:\Users\Pine Rivers P&C\Google Drive\Pine Rivers Community Aquatics"
 #-------------------------------------------
-# Path to Club Champion Reference Times
-
+# Path To Laptop Documents Directory
+$DocumentsPath = "D:\Home\Shaun\OneDrive\Documents\SwimClub\Documents" #"C:\Users\Pine Rivers P&C\Documents"
 #-------------------------------------------
-
-# Import the Module
-Import-Module "$SwimDataPath\Powershell\Swim.Club.psm1" -Force
-
-# Create an array of the strokes to use in the Towel & 25m Improvement
-$strokearray = "Backstroke", "Breaststroke", "Butterfly", "Freestyle"
+# Folder & Filename of Club Champion Reference Times & Swimmer Categories
+$ClubChampFolder = "ClubChampionReferences"
+$QualTimesCsv = "ClubChampTimes.csv"
+$CategoryCsv = "SwimmersCategories.csv"
+#-------------------------------------------
 
 # Get the date and workout the current season
 $date = get-date
 $month = $date.Month
-$year = [int]($date.ToString('yy'))
+$shortyear = [int]($date.ToString('yy'))
+$longyear = [int]($date.ToString('yyyy'))
 if ($Month -ge 7) {
-    $season = "$($year).$($year + 1)"
+    $shortseason = "$($longyear)-$($shortyear + 1)"
 }
 else {
-    $season = "$($year-1).$($year)"
+    $shortseason = "$($longyear - 1)-$($shortyear)"
 }
 Clear-Host
 
 #Ask if the current season is to be used?
 do {
-    $seasoninput = Read-Host -Prompt "Swim season $($season)?`nPress [Enter] for season $season or enter the season (in 'yy.yy' format) and press [Enter]"
+    $seasoninput = Read-Host -Prompt "Swim season $($shortseason)?`nPress [Enter] for season $shortseason or enter the season (in 'yyyy-yy' format) and press [Enter]"
     if (-not $seasoninput) {
-        $seasoninput = $season
+        $seasoninput = $shortseason
     }
 }
-until ($seasoninput -like "??.??")
+until ($seasoninput -like "????-??")
 
-#Use the season to finalise paths for results and data
+#Construct Long season name from short season
+$firsthalf = [int]($seasoninput.Substring(0,4))
+$secondhalf = $firsthalf + 1
+$longseason = "$($firsthalf) - $($secondhalf) Season"
+
+#Use the season to finalise paths
 $DataPath = "$($SwimDataPath)\$($seasoninput)\AwardData"
-$ResultsPath = "$($GoogleDrivePath)\$($seasoninput)\ClubAwards"
+$ResultsPath = "$($GoogleDrivePath)\$($longseason)\ClubAwards"
+$QualTimes = "$($DocumentsPath)\$($seasoninput)\$($ClubChampFolder)\$($QualTimesCsv)"
+$CategoryPath = "$($DocumentsPath)\$($seasoninput)\$($ClubChampFolder)\$($CategoryCsv)"
+
+# Import the Module
+Import-Module "$DocumentsPath\Software\Powershell\Swim.Club.psm1" -Force
+
+# Create an array of the strokes to use in the Towel & 25m Improvement
+$strokearray = "Backstroke", "Breaststroke", "Butterfly", "Freestyle"
 
 #-------------------------------------------
 # Load the season data
@@ -196,7 +209,7 @@ do {
                 $trophies["Aggregate Points"] = Get-AggregatePointsTrophies $cleandata -Verbose
             }
             if ($trophyinput -in (7,8)) {
-                $trophies["Club Champion"] = Get-ClubChampion $cleandata -Verbose
+                $trophies["Club Champion"] = Get-ClubChampion $cleandata -CategoryPath $CategoryPath -QualTimesPath $QualTimes -Verbose
             }
             if (-not(Test-Path "$($ResultsPath)\Trophies")) {
                 New-Item -Name "Trophies" -ItemType Directory -Path $ResultsPath

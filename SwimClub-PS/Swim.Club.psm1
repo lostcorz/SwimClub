@@ -16,7 +16,8 @@ $PRCACAwardsConfig = @{
             "4points" = "09.99"
             "5points" = "04.99"
             "6points" = "09.99"
-            #All above are 7 Points
+            "7points" = "14.99"
+            #All above are 8 Points
         }
     }
     "Achievement" = @{
@@ -42,7 +43,8 @@ $PRCACAwardsConfig = @{
         "AgeRanges" = @{
             "7andUnder" = (4..7)
             "8and9" = (8, 9)
-            "10andOver" = (10..17)
+            "10and11" = (10, 11)
+            "12andOver" = (12..17)
         }
         "TopPercentAwarded" = 25
     }
@@ -88,6 +90,10 @@ $PRCACAwardsConfig = @{
         "MinAge" = 11
         "TopXEvents" = 4
         "Events" = "IM400", "Freestyle800", "Backstroke200", "Breaststroke200", "Butterfly200"
+    }
+    "ClubChampion" = @{
+        "MinAge" = 10
+        "TopXEvents" = 13
     }
 }
 function Get-SwimmerData {
@@ -209,7 +215,7 @@ function Confirm-SwimmerData {
                     $pnts = $timespans['regular']
                 }
                 #Order the data by meet date and get the count of meets
-                $ordered = $SwimmerData[$swimmer][$stroke] | sort date
+                $ordered = $SwimmerData[$swimmer][$stroke] | Sort-Object date
                 $orderedCount = $ordered.count
                 if (-not $orderedCount -and $ordered.Date) {
                     $orderedCount = 1
@@ -285,8 +291,7 @@ function Confirm-SwimmerData {
                         elseif ($timediff -le $pnts.'6ptTimeSpan') {
                             $points = 6
                         }
-                        #All other endurance results are 7 points
-                        elseif ($endurance -or $timediff -le $pnts.'7ptTimeSpan') {
+                        elseif ($timediff -le $pnts.'7ptTimeSpan') {
                             $points = 7
                         }
                         #all other standard results are 8 points
@@ -354,7 +359,7 @@ function Get-AchievementAwards {
             $AwardsDue = @()
             foreach ($stroke in $SwimmerData[$swimmer].Keys) {
                 if ($SwimmerData[$swimmer][$stroke].pb -contains "Yes") {
-                    $pbs = ($SwimmerData[$swimmer][$stroke] | where {$_.pb -eq "Yes"}).count
+                    $pbs = ($SwimmerData[$swimmer][$stroke] | Where-Object {$_.pb -eq "Yes"}).count
                     if (-not $pbs) {
                         $pbs = 1                    
                     }
@@ -410,7 +415,7 @@ function Get-AchievementAwards {
             }
             if ($AwardsDue.count -gt 0) {
                 $newawards = $null
-                $swmrawards = ($AwardsList | where {$_.swimmer -like $swimmer}).achievementawards
+                $swmrawards = ($AwardsList | Where-Object {$_.swimmer -like $swimmer}).achievementawards
                 foreach ($award in $AwardsDue) {
                     if ($swmrawards -notlike "*$($award)*" -and $newawards -eq $null) {
                         $newawards += $award
@@ -430,7 +435,7 @@ function Get-AchievementAwards {
         }
     }
     end {
-        Write-Output ($array | sort Swimmmer)
+        Write-Output ($array | Sort-Object Swimmmer)
     }
 }
 function Get-TowelAwards {
@@ -465,14 +470,14 @@ function Get-TowelAwards {
     }
     process {
         foreach ($swmr in $SwimmerData.Keys) {
-            $swmrawards = ($awardslist | where {$_.swimmer -eq $swmr}).TowelAwards
+            $swmrawards = ($awardslist | Where-Object {$_.swimmer -eq $swmr}).TowelAwards
             if (-not $swmrawards) {
                 $points = $null
-                $swmrevents = $SwimmerData[$swmr].Keys | where {$_ -in $events}
-                $swmrage = ($SwimmerData[$swmr].Values.age | measure -Maximum).Maximum
+                $swmrevents = $SwimmerData[$swmr].Keys | Where-Object {$_ -in $events}
+                $swmrage = ($SwimmerData[$swmr].Values.age | Measure-Object -Maximum).Maximum
                 foreach ($stroke in $swmrevents) {
-                    $StrokeEvents = $SwimmerData[$swmr][$stroke] | where {$_.Date -in $filters}
-                    $StrokePoints = ($StrokeEvents | measure -Property Points -sum).Sum
+                    $StrokeEvents = $SwimmerData[$swmr][$stroke] | Where-Object {$_.Date -in $filters}
+                    $StrokePoints = ($StrokeEvents | Measure-Object -Property Points -sum).Sum
                     $points += $StrokePoints
                 }
                 if ($points -ge $Towel['minpoints']) {
@@ -497,7 +502,7 @@ function Get-TowelAwards {
             $rangeswimmers += $pointsarray | Where-Object {$_.Age -in $towel['AgeRanges'][$range]} | Sort-Object Points -Descending
             if ($rangeswimmers) {
                 $toppoints = $rangeswimmers[0].points
-                $count = ($rangeswimmers | where {$_.Points -eq $toppoints}).count
+                $count = ($rangeswimmers | Where-Object {$_.Points -eq $toppoints}).count
                 if (-not $count) {
                     $count = 1
                 }
@@ -537,13 +542,13 @@ function Get-AggregatePointsTrophies {
     process {
         foreach ($swmr in $SwimmerData.Keys) {
             write-verbose "Aggregating points for $swmr"
-            $swmrage = ($SwimmerData[$swmr].values.age | measure -Maximum).Maximum
-            $events = $SwimmerData[$swmr].Keys | Where {$_ -in $filters}
+            $swmrage = ($SwimmerData[$swmr].values.age | Measure-Object -Maximum).Maximum
+            $events = $SwimmerData[$swmr].Keys | Where-Object {$_ -in $filters}
             $swmrpoints = 0
             foreach ($evt in $events) {
-                $swmrpoints += ($SwimmerData[$swmr][$evt].points | measure -Sum).Sum
+                $swmrpoints += ($SwimmerData[$swmr][$evt].points | Measure-Object -Sum).Sum
             }
-            $rangename = ($Aggpoints['AgeRanges'].GetEnumerator() | where {$_.Value -contains $swmrage}).name
+            $rangename = ($Aggpoints['AgeRanges'].GetEnumerator() | Where-Object {$_.Value -contains $swmrage}).name
             $obj = New-Object PSObject
             $obj | Add-Member -MemberType NoteProperty -Name Swimmer -Value $swmr
             $obj | Add-Member -MemberType NoteProperty -Name Category -Value $rangename
@@ -555,9 +560,9 @@ function Get-AggregatePointsTrophies {
         foreach ($range in $Aggpoints['AgeRanges'].Keys) {
             Write-Verbose "Ranking $range range swimmers"
             $placing = 1
-            $trophyplaces = [math]::Round((($array | where {$_.Category -eq $range}).count) * ($Aggpoints['TopPercentAwarded']/100))
-            $groups = $array | where {$_.Category -eq $range} | group -Property Points -AsHashTable
-            foreach ($grp in ($groups.Keys | sort -desc)) {
+            $trophyplaces = [math]::Round((($array | Where-Object {$_.Category -eq $range}).count) * ($Aggpoints['TopPercentAwarded']/100))
+            $groups = $array | Where-Object {$_.Category -eq $range} | Group-Object -Property Points -AsHashTable
+            foreach ($grp in ($groups.Keys | Sort-Object -desc)) {
                 $grpcount = $groups[$grp].Count
                 foreach ($swmr in $groups[$grp]) {
                     if ($placing -in (1..$trophyplaces)){
@@ -573,7 +578,7 @@ function Get-AggregatePointsTrophies {
         }
     }
     end {
-        write-output ($array | sort Cat*)
+        write-output ($array | Sort-Object Cat*)
     }
 }
 function Get-25ImprovementTrophies {
@@ -588,16 +593,16 @@ function Get-25ImprovementTrophies {
         $array = @()
     }
     process {
-        $meets = $SwimmerData.Values.values.Date | select -Unique | sort
+        $meets = $SwimmerData.Values.values.Date | Select-Object -Unique | Sort-Object
         foreach ($swmr in $SwimmerData.Keys) {
-            if ($SwimmerData[$swmr].Keys | where {$_ -like "$($strokename)25"}) {
+            if ($SwimmerData[$swmr].Keys | Where-Object {$_ -like "$($strokename)25"}) {
                 Write-Verbose "Fetching 25m $strokename times for $swmr"
                 $obj = New-Object PSObject
                 $obj | Add-Member -MemberType NoteProperty -Name Swimmer -Value $swmr
                 $Fastest25Span = $null
                 $First25Span = $null
                 foreach ($meet in $meets) {
-                    $25meet = $SwimmerData[$swmr]["$($strokename)25"] | where {$_.Date -eq $meet}
+                    $25meet = $SwimmerData[$swmr]["$($strokename)25"] | Where-Object {$_.Date -eq $meet}
                     if ($25meet) {
                         try {
                             $25meetspan = [timespan]::ParseExact($25meet.time, $timepatterns, [cultureinfo]::CurrentCulture)
@@ -668,7 +673,7 @@ function Get-25ImprovementTrophies {
         }
     }
     end {
-        Write-Output ($array | sort TimeImprovement -desc)
+        Write-Output ($array | Sort-Object TimeImprovement -desc)
     }
 }
 function Get-IMPointsTrophies {
@@ -686,12 +691,12 @@ function Get-IMPointsTrophies {
     }
     process {
         foreach ($swmr in $SwimmerData.Keys) {
-            $strokes = $swimmerdata[$swmr].keys | where {$_ -in $events}
+            $strokes = $swimmerdata[$swmr].keys | Where-Object {$_ -in $events}
             if ($strokes) {
                 $finalpoints = 0
                 write-verbose "Aggregating IM Points for $swmr"
-                $swmrage = ($swimmerdata.$swmr.Values.Age | measure -Maximum).Maximum
-                $rangename = ($IM['AgeRanges'].GetEnumerator() | where {$_.Value -contains $swmrage}).name
+                $swmrage = ($swimmerdata.$swmr.Values.Age | Measure-Object -Maximum).Maximum
+                $rangename = ($IM['AgeRanges'].GetEnumerator() | Where-Object {$_.Value -contains $swmrage}).name
                 $obj = New-Object PSObject
                 $obj | Add-Member -MemberType NoteProperty -Name 'Swimmer' -Value $swmr
                 $obj | Add-Member -MemberType NoteProperty -Name 'Age' -Value $swmrage
@@ -717,8 +722,8 @@ function Get-IMPointsTrophies {
         foreach ($range in $IM['AgeRanges'].Keys) {
             write-verbose "Ranking $range range swimmers"
             $placing = 1
-            $groups = $array | where {$_.Category -eq $range} | group -Property Totalpoints -AsHashTable
-            foreach ($grp in ($groups.Keys | sort -desc)) {
+            $groups = $array | Where-Object {$_.Category -eq $range} | Group-Object -Property Totalpoints -AsHashTable
+            foreach ($grp in ($groups.Keys | Sort-Object -desc)) {
                 $grpcount = $groups[$grp].Count
                 foreach ($swmr in $groups[$grp]) {
                     $swmr.categoryplacing = $placing
@@ -728,7 +733,7 @@ function Get-IMPointsTrophies {
         }
     }
     end {
-        write-output ($array | sort cat*)
+        write-output ($array | Sort-Object cat*)
     }
 }
 function Get-PinetathlonTrophies {
@@ -741,11 +746,11 @@ function Get-PinetathlonTrophies {
         $array = @()
     }
     process {
-        $pinestrokes = $pinetathlon['events'].values | foreach {$_.split(" ")} | select -Unique
+        $pinestrokes = $pinetathlon['events'].values | ForEach-Object {$_.split(" ")} | Select-Object -Unique
         foreach ($swmr in $SwimmerData.Keys) {
-            $swmrage = ($swimmerdata[$swmr].Values.Age | measure -Maximum).Maximum
-            $rangename = ($pinetathlon['AgeRanges'].GetEnumerator() | where {$_.Value -contains $swmrage}).name
-            $swmrpineevents = $SwimmerData[$swmr].Keys | where {$_ -in $pinetathlon.events.$rangename}
+            $swmrage = ($swimmerdata[$swmr].Values.Age | Measure-Object -Maximum).Maximum
+            $rangename = ($pinetathlon['AgeRanges'].GetEnumerator() | Where-Object {$_.Value -contains $swmrage}).name
+            $swmrpineevents = $SwimmerData[$swmr].Keys | Where-Object {$_ -in $pinetathlon.events.$rangename}
             if ($swmrpineevents.count -eq ($pinetathlon['events'][$rangename].count)) {
                 Write-Verbose "Fetching fastest times for Pinetathlon events for $swmr"
                 $totaltime = $null
@@ -758,10 +763,10 @@ function Get-PinetathlonTrophies {
                     if ($stroke -in $pinetathlon.events.$rangename -and $stroke -in $swmrpineevents) {
                         Write-Verbose "processing $stroke for $swmr"
                         $stroketimes = @()
-                        foreach ($i in ($SwimmerData[$swmr][$stroke].time | where {$_ -ne 'DQ'})) {
+                        foreach ($i in ($SwimmerData[$swmr][$stroke].time | Where-Object {$_ -ne 'DQ'})) {
                             $stroketimes += [timespan]::ParseExact($i, $timepatterns, [cultureinfo]::CurrentCulture)
                         }
-                        $fastesttime = ($stroketimes | measure -Minimum).Minimum
+                        $fastesttime = ($stroketimes | Measure-Object -Minimum).Minimum
                         $totaltime += $fastesttime
                         $stroketime = $fastesttime.ToString('mm":"ss"."ff')
                         $obj | Add-Member -MemberType NoteProperty -Name $stroke -Value $stroketime
@@ -777,7 +782,7 @@ function Get-PinetathlonTrophies {
         }
         foreach ($range in $pinetathlon.AgeRanges.Keys) {
             write-verbose "Ranking $range range swimmers"
-            $orderedarray = $array | where {$_.Category -eq $range -and $_.TotalTime -notlike "N/A*"} | sort TotalTime
+            $orderedarray = $array | Where-Object {$_.Category -eq $range -and $_.TotalTime -notlike "N/A*"} | Sort-Object TotalTime
             foreach ($obj in $orderedarray) {
                 if ($orderedarray.count) {
                     $place = $orderedarray.IndexOf($obj) + 1
@@ -790,7 +795,7 @@ function Get-PinetathlonTrophies {
         }
     }
     end {
-        Write-Output ($array | sort Cat*) 
+        Write-Output ($array | Sort-Object Cat*) 
     }
 }
 function Get-DistanceTrophies {
@@ -803,14 +808,14 @@ function Get-DistanceTrophies {
         $array = @()
     }
     process {
-        $strokes = $distance['events'].values | foreach {$_.split(" ")} | select -Unique
+        $strokes = $distance['events'].values | ForEach-Object {$_.split(" ")} | Select-Object -Unique
         foreach ($swmr in $SwimmerData.Keys) {
-            $diststrokes = $swimmerdata[$swmr].keys | where {$_ -in $strokes}
+            $diststrokes = $swimmerdata[$swmr].keys | Where-Object {$_ -in $strokes}
             if ($distStrokes) {
                 Write-Verbose "Aggregating distance events points for $swmr"
                 $finalpoints = 0
-                $swmrage = ($swimmerdata[$swmr].Values.Age | measure -Maximum).Maximum
-                $rangename = ($distance.AgeRanges.GetEnumerator() | where {$_.Value -contains $swmrage}).name
+                $swmrage = ($swimmerdata[$swmr].Values.Age | Measure-Object -Maximum).Maximum
+                $rangename = ($distance.AgeRanges.GetEnumerator() | Where-Object {$_.Value -contains $swmrage}).name
                 $obj = New-Object PSObject
                 $obj | Add-Member -MemberType NoteProperty -Name Swimmer -Value $swmr
                 $obj | Add-Member -MemberType NoteProperty -Name Age -Value $swmrage
@@ -835,8 +840,8 @@ function Get-DistanceTrophies {
         foreach ($range in $distance['AgeRanges'].Keys) {
             write-verbose "Ranking $range range swimmers"
             $placing = 1
-            $groups = $array | where {$_.Category -eq $range} | group -Property Totalpoints -AsHashTable
-            foreach ($grp in ($groups.Keys | sort -desc)) {
+            $groups = $array | Where-Object {$_.Category -eq $range} | Group-Object -Property Totalpoints -AsHashTable
+            foreach ($grp in ($groups.Keys | Sort-Object -desc)) {
                 $grpcount = $groups[$grp].Count
                 foreach ($swmr in $groups[$grp]) {
                     $swmr.categoryplacing = $placing
@@ -846,7 +851,7 @@ function Get-DistanceTrophies {
         }
     }
     end {
-        write-output ($array | sort cat*)
+        write-output ($array | Sort-Object cat*)
     }
 }
 function Get-EnduranceTrophies {
@@ -860,8 +865,8 @@ function Get-EnduranceTrophies {
     }
     process {
         foreach ($swmr in $SwimmerData.Keys) {
-            $swmrage = ($swimmerdata[$swmr].Values.Age | measure -Maximum).Maximum
-            $strokes = $swimmerdata[$swmr].Keys | where {$_ -in $endurance['events']}
+            $swmrage = ($swimmerdata[$swmr].Values.Age | Measure-Object -Maximum).Maximum
+            $strokes = $swimmerdata[$swmr].Keys | Where-Object {$_ -in $endurance['events']}
             if ($strokes.count -ge $endurance['topxevents'] -and $swmrage -ge $endurance['MinAge']) {
                 Write-Verbose "Aggregating Endurance points for $swmr"
                 $totalpoints = @()
@@ -878,14 +883,14 @@ function Get-EnduranceTrophies {
                         $obj | Add-Member -MemberType NoteProperty -Name $evt -Value $null
                     }
                 }
-                $FinalPoints = ($totalpoints | sort -desc | select -First $endurance['topxevents'] | measure -sum).sum
+                $FinalPoints = ($totalpoints | Sort-Object -desc | Select-Object -First $endurance['topxevents'] | Measure-Object -sum).sum
                 $obj | Add-Member -MemberType NoteProperty -Name TotalPoints -Value $FinalPoints
                 $array += $obj
             }
         }
     }
     End {
-        Write-Output ($array | sort TotalPoints -Descending)
+        Write-Output ($array | Sort-Object TotalPoints -Descending)
     }
 }
 function Get-ClubChampion {
@@ -898,54 +903,51 @@ function Get-ClubChampion {
     begin {
         $outputarray = Import-Csv $CategoryPath
         $qualtimes = import-csv $QualTimesPath
+        $clubchamp = $PRCACAwardsConfig['ClubChampion']
     }
     process {
         foreach ($swimmer in $outputarray) {
-            $eligable = $true
+            write-host $swimmer.Swimmer
             $swimmer | Add-Member -MemberType NoteProperty -Name Place -Value $null
+            $swmrage = [int]($swimmer.Category -replace '[a-zA-Z]','')
             $swmrevents = $SwimmerData[$swimmer.Swimmer]
-            $fastesttimespans = @()
-            $qualtimespans = @()
+            $swmrPercentages = @()
             foreach ($evt in $qualtimes) {
-                Write-Host "$($evt.Event)" -ForegroundColor Green
-                if ($evt.Event -in $swmrevents.keys) {
-                    Write-Host "$($evt.Event) in Swimmers Events" -ForegroundColor Green
+                if ($evt.Event -in $swmrevents.keys -and $swmrage -ge $clubchamp['MinAge']) {
                     $stroketimes = @()
-                    foreach ($i in ($swmrevents[($evt.Event)].Time | where {$_ -ne 'DQ'})) {
+                    foreach ($i in ($swmrevents[($evt.Event)].Time | Where-Object {$_ -ne 'DQ'})) {
                         $stroketimes += [timespan]::ParseExact($i, $timepatterns, [cultureinfo]::CurrentCulture)
                     }
-                    Write-Host "$($stroketimes.count) in Swimmers Events" -ForegroundColor Green
-                    $fastesttimespan = ($stroketimes | measure -Minimum).Minimum
-                    $fastesttimespans += $fastesttimespan
-                    $qualtime = ($qualtimes | where {$_.event -eq $evt.Event}).($swimmer.Category)
+                    Write-Verbose "$($stroketimes.count) count of $($evt.Event) in $($Swimmer.Swimmer)'s Events"
+                    $fastesttimespan = ($stroketimes | Measure-Object -Minimum).Minimum
+                    $qualtime = ($qualtimes | Where-Object {$_.event -eq $evt.Event}).($swimmer.Category)
                     $qualtimespan = [TimeSpan]::FromSeconds($qualtime)
-                    $qualtimespans += $qualtimespan
                     $percentdif = $fastesttimespan.TotalMilliseconds / $qualtimespan.TotalMilliseconds * 100
                     $evtpercent = [math]::Round($percentdif,2)
                     $swimmer | Add-Member -MemberType NoteProperty -Name $evt.Event -Value $evtpercent
+                    $swmrPercentages += $evtpercent
                 }
                 else {
                     $swimmer | Add-Member -MemberType NoteProperty -Name $evt.Event -Value 'N/A'
-                    $eligable = $false
                 }
             }
-            $totalpercentdif = ($fastesttimespans.TotalMilliseconds | measure -Sum).sum / ($qualtimespans.TotalMilliseconds | measure -Sum).sum * 100
-            $finalpercent = [math]::Round($totalpercentdif,2)
-            if ($eligable) {
-                $swimmer | Add-Member -MemberType NoteProperty -Name 'TotalPercentageDif' -Value $finalpercent
+            if ($swmrPercentages.count -ge $clubchamp['topxevents']) {
+                $finalpercent = ($swmrPercentages | Sort-Object | Select-Object -First $clubchamp['topxevents'] | Measure-Object -Sum).Sum
+                $swimmer | Add-Member -MemberType NoteProperty -Name 'TotalPercentage' -Value $finalpercent
             }
             else {
-                $swimmer | Add-Member -MemberType NoteProperty -Name 'TotalPercentageDif' -Value 'N/A'
+                $swimmer | Add-Member -MemberType NoteProperty -Name 'TotalPercentage' -Value 'N/A'
             }
         }
-        $orderedarray = $outputarray | sort TotalPoints -Descending
+        $orderedarray = $outputarray | Where-Object {$_.TotalPercentage -ne 'N/A'} | Sort-Object TotalPercentage
         foreach ($obj in $orderedarray) {
+            $outobj = $outputarray | Where-Object {$_.Swimmer -eq $obj.Swimmer}
             $place = $orderedarray.IndexOf($obj) + 1
-            $obj.Place = $place
+            $outobj.Place = $place
         }
     }
     end {
-        Write-Output ($outputarray | sort TotalPoints -desc)
+        Write-Output ($outputarray | Sort-Object Place)
     }
 }
 function Update-AwardsList {
@@ -966,14 +968,14 @@ function Update-AwardsList {
     }
     process {
         foreach ($swmr in $NewAwardData) {
-            $obj = $AwardData | where {$_.Swimmer -eq $swmr.swimmer}
+            $obj = $AwardData | Where-Object {$_.Swimmer -eq $swmr.swimmer}
             if (-not $obj) {
                 $obj = New-Object PSObject
                 $obj | Add-Member -MemberType NoteProperty -Name Swimmer -Value $swmr.swimmer
                 $obj | Add-Member -MemberType NoteProperty -Name AchievementAwards -Value $null
                 $obj | Add-Member -MemberType NoteProperty -Name TowelAwards -Value $null
                 $AwardData += $obj
-                $obj = $AwardData | where {$_.Swimmer -eq $swmr.swimmer}
+                $obj = $AwardData | Where-Object {$_.Swimmer -eq $swmr.swimmer}
             }
             #Achievement Awards
             if ($swmr.AwardsDue -and $obj.achievementawards) {
@@ -989,7 +991,7 @@ function Update-AwardsList {
         }
     }
     end {
-        Write-Output ($AwardData | sort Swimmer)
+        Write-Output ($AwardData | Sort-Object Swimmer)
     }
 }
 function Get-ModifiedData {
@@ -1003,7 +1005,7 @@ function Get-ModifiedData {
     process {
         foreach ($swimmer in $CleanedData.Keys) {
             foreach ($Stroke in $CleanedData.$Swimmer.Keys) {
-                foreach ($Meet in ($CleanedData.$Swimmer.$Stroke.GetEnumerator() | where {$_.Changed -ne $null})) {
+                foreach ($Meet in ($CleanedData.$Swimmer.$Stroke.GetEnumerator() | Where-Object {$_.Changed -ne $null})) {
                     $obj = New-Object psobject -Property @{
                         Swimmer = $Swimmer
                         Event = $Stroke
@@ -1021,7 +1023,7 @@ function Get-ModifiedData {
         }
     }
     end {
-        Write-Output ($outputarray | sort Swimmer, Event, Date)
+        Write-Output ($outputarray | Sort-Object Swimmer, Event, Date)
     }
 }
 function Get-SwimmersEvents {
@@ -1063,7 +1065,7 @@ function Get-SwimmersEvents {
         }
     }
     end {
-        Write-Output ($outputarray | sort Event, Date)
+        Write-Output ($outputarray | Sort-Object Event, Date)
     }
 }
 function Get-ExcelData {
@@ -1077,18 +1079,18 @@ function Get-ExcelData {
         $SwimmersName = "Swenson, $swimmer"
     }
     process {
-        $meetdates = $SwimmerData.$SwimmersName.Values.Date | select -Unique | sort
+        $meetdates = $SwimmerData.$SwimmersName.Values.Date | Select-Object -Unique | Sort-Object
         foreach ($meet in $meetdates) {
             $obj = New-Object psobject
             $obj | Add-Member -MemberType NoteProperty -Name Date -Value $meet
             foreach ($stroke in $SwimmerData.$SwimmersName.Keys) {
-                $meetdata = $SwimmerData.$SwimmersName.$stroke | where {$_.date -eq $meet}
+                $meetdata = $SwimmerData.$SwimmersName.$stroke | Where-Object {$_.date -eq $meet}
                 if ($meetdata) {
                     $obj | Add-Member -MemberType NoteProperty -Name $stroke -Value $meetdata.Time
                 }
             }
             if ($outputarray) {
-                $newobjs = $obj | gm | where {$_.MemberType -eq "NoteProperty" -and $_.Name -notin (($outputarray | gm).Name)}
+                $newobjs = $obj | Get-Member | Where-Object {$_.MemberType -eq "NoteProperty" -and $_.Name -notin (($outputarray | Get-Member).Name)}
                 foreach ($new in $newobjs) {
                     $outputarray | Add-Member -MemberType NoteProperty -Name $new.name -Value $null
                 }
@@ -1097,7 +1099,7 @@ function Get-ExcelData {
         }
     }
     end {
-        Write-Output ($outputarray | select Date, *25, *50, *00 | sort Date)  
+        Write-Output ($outputarray | Select-Object Date, *25, *50, *00 | Sort-Object Date)  
     }
 }
 [String[]]$timepatterns = @(
