@@ -26,7 +26,7 @@ if ($Month -ge 7) {
 else {
     $shortseason = "$($longyear - 1)-$($shortyear)"
 }
-Clear-Host
+#clear-host
 
 #Ask if the current season is to be used?
 do {
@@ -57,7 +57,7 @@ $strokearray = "Backstroke", "Breaststroke", "Butterfly", "Freestyle"
 #-------------------------------------------
 # Load the season data
 $cleandata = get-swimmerdata $DataPath -Verbose | Confirm-SwimmerData -verbose
-Clear-Host
+##clear-host
 Write-host "Data imported `n"
 #-------------------------------------------
 # Main award menu
@@ -73,28 +73,22 @@ do {
         "1" {
             if (Test-Path "$($ResultsPath)\AwardsList.csv") {
                 $importinput = "Y"
+                $newawards = Get-AchievementAwards $cleandata -AwardsListLocation $ResultsPath
+                $updatedawards = Update-AwardsList -NewAwardData $newawards -AwardsListLocation $ResultsPath
             }
             else {
                 $importinput = "N"
+                $newawards = Get-AchievementAwards $cleandata -Verbose
+                $updatedawards = Update-AwardsList -NewAwardData $newawards
             }    
-            switch ($importinput) {
-                "Y" {
-                    $newawards = Get-AchievementAwards $cleandata -AwardsListLocation $ResultsPath
-                    $updatedawards = Update-AwardsList -NewAwardData $newawards -AwardsListLocation $ResultsPath
-                }
-                "N" {
-                    $newawards = Get-AchievementAwards $cleandata -Verbose
-                    $updatedawards = Update-AwardsList -NewAwardData $newawards
-                }
-            }
-            clear-host
+            #clear-host
             if ($newawards) {
                 write-host "The award winners are:"
                 foreach ($swmr in $newawards) {
                     write-host $swmr
                 }
                 write-host "`n"
-                $writeinput = read-host -prompt "Write these out to file and update the AwardsList (Y or N)?`nEnter Y or N then press [Enter]" 
+                $writeinput = read-host -prompt "Approve these winners and write report?`nEnter Y or N then press [Enter]" 
                 if ($writeinput -eq "N") {
                     break
                 }
@@ -111,7 +105,7 @@ do {
                     Copy-Item "$($ResultsPath)\AwardsList.csv" -Destination "$($ResultsPath)\_HistoricAwardslists\AwardsList_$($date.tostring('yyMMdd')).csv"
                 }
                 $updatedawards | Export-Csv -NoTypeInformation "$($ResultsPath)\AwardsList.csv" -force
-                clear-host
+                #clear-host
                 Write-Host "Achievement Award report was written to $($ResultsPath)\AchievementAwards\Awards_$clubnightdate.txt"
             }
             do {
@@ -123,7 +117,8 @@ do {
         #-------------------------------------------
         # Towel Awards
         "2" {
-            clear-host
+            #clear-host
+            $AwardListExists = Test-Path "$($ResultsPath)\AwardsList.csv"
             do {
                 $startDate = Read-Host -Prompt "First club night date for the 4 week period?`nEnter the date of the first club night in dd/mm/yy format, then press [Enter]"
             }
@@ -134,21 +129,26 @@ do {
                 }
                 until ($strokeinput -in (1..4))
                 $Strokename = $strokearray[$strokeinput - 1]
-                $newawards = Get-TowelAwards $cleandata -Stroke $Strokename -FirstClubNight $StartDate -AwardsListLocation $ResultsPath -numberofweeks 4
+                if (Test-Path "$($ResultsPath)\AwardsList.csv") {
+                    $newawards = Get-TowelAwards $cleandata -Stroke $Strokename -FirstClubNight $StartDate -AwardsListLocation $ResultsPath -numberofweeks 4
+                }
+                else {
+                    $newawards = Get-TowelAwards $cleandata -Stroke $Strokename -FirstClubNight $StartDate -numberofweeks 4
+                } 
                 if (-not $newawards) {
-                    clear-host
+                    #clear-host
                     write-host "There are no award winners for $strokename"
                     write-host "`n"
                     $writeinput = "N"
                 }
                 else {
-                    clear-host
+                    #clear-host
                     write-host "The award winners are:"
                     foreach ($swmr in $newawards) {
                         write-host $swmr
                     }
                     write-host "`n"
-                    $writeinput = read-host -prompt "Write these out to file and update the AwardsList (Y or N)?`nEnter Y or N then press [Enter]" 
+                    $writeinput = read-host -prompt "Approve these winners and write report?`nEnter Y or N then press [Enter]" 
                 }
                 if ($writeinput -eq "N") {
                     $newstroke = read-host -prompt "Try another stroke?`nEnter Y or N, then press [Enter]"
@@ -163,13 +163,18 @@ do {
                 New-Item -Name "TowelAwards" -ItemType Directory -Path $ResultsPath
                 }
                 $newawards | Out-File "$ResultsPath\TowelAwards\$strokename.txt"
-                $updatedawards = Update-AwardsList -NewAwardData $newawards -AwardsListLocation $ResultsPath
-                if (-not(Test-Path "$($ResultsPath)\_HistoricAwardslists")) {
-                    New-Item -Name "_HistoricAwardslists" -ItemType Directory -Path $ResultsPath
+                if ($AwardListExists) {
+                    $updatedawards = Update-AwardsList -NewAwardData $newawards -AwardsListLocation $ResultsPath
+                    if (-not(Test-Path "$($ResultsPath)\_HistoricAwardslists")) {
+                        New-Item -Name "_HistoricAwardslists" -ItemType Directory -Path $ResultsPath
+                    }
+                    Copy-Item "$($ResultsPath)\AwardsList.csv" -Destination "$($ResultsPath)\_HistoricAwardslists\AwardsList_$($date.tostring('yyMMdd')).csv"
                 }
-                Copy-Item "$($ResultsPath)\AwardsList.csv" -Destination "$($ResultsPath)\_HistoricAwardslists\AwardsList_$($date.tostring('yyMMdd')).csv"
+                else {
+                    $updatedawards = Update-AwardsList -NewAwardData $newawards
+                }
                 $updatedawards | Export-Csv -NoTypeInformation "$($ResultsPath)\AwardsList.csv" -force
-                clear-host
+                #clear-host
                 Write-Host "Towel Award report was written to $($ResultsPath)\TowelAwards\$($strokename).txt"
             }
             do {
@@ -182,7 +187,7 @@ do {
         # End of Season Trophies
         "3" {
             $trophies = @{}
-            clear-host
+            #clear-host
             do {
                 $trophyinput = Read-Host `
                     -Prompt "Which trophy to report on?`n[1] 25m Improvement`n[2] Distance`n[3] IM`n[4] Pinetathlon`n[5] Endurance`n[6] Aggregate Points`n[7] Club Champion`n[8] All Trophies`nEnter 1 to 8 and press [Enter]"
@@ -215,9 +220,9 @@ do {
                 New-Item -Name "Trophies" -ItemType Directory -Path $ResultsPath
             }
             foreach ($Trophy in $trophies.Keys) {
-                $trophies.$Trophy | export-csv "$($ResultsPath)\Trophies\$($Trophy).csv" -NoTypeInformation
+                $trophies.$Trophy | export-csv "$($ResultsPath)\Trophies\$($Trophy).csv" -NoTypeInformation -Force
             }
-            #clear-host
+            ##clear-host
             Write-Host "Trophy reports were written to $($ResultsPath)\Trophies"
             do {
                 $returnmenu = Read-Host `

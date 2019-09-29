@@ -443,7 +443,7 @@ function Get-TowelAwards {
     param (
         [Parameter(Mandatory=$true,Position=0)]$SwimmerData,
         [Parameter(Mandatory=$true)][ValidateSet('Butterfly','Backstroke','Breaststroke','Freestyle')]$Strokename,
-        [Parameter(Mandatory=$true,HelpMessage="Path to AwardsList.csv file")]$AwardsListLocation,
+        [Parameter(HelpMessage="Path to AwardsList.csv file")]$AwardsListLocation,
         [Parameter(Mandatory=$true,HelpMessage="Date in dd/mm/yy format")]$FirstClubNight,
         [Parameter()]$numberofweeks=4
     )
@@ -451,6 +451,13 @@ function Get-TowelAwards {
         $towel = $PRCACAwardsConfig['Towel']
         #Create the date filters based on the first club night entered & number of weeks
         $1stClubNightDate = Get-Date $FirstClubNight
+        $pathcheck = Test-Path "$AwardsListLocation\AwardsList.csv" -ErrorAction SilentlyContinue
+        if ($pathcheck) {
+            $AwardsList = Import-csv $AwardsListLocation\"AwardsList.csv"    
+        }
+        else {
+            $AwardsList = $null
+        }
         $filters = @()
         $count = 0
         while ($filters.count -lt $numberofweeks) {
@@ -466,7 +473,6 @@ function Get-TowelAwards {
         }
         $pointsarray = @()
         $array = @()
-        $awardslist = import-csv "$AwardsListLocation\AwardsList.csv"
     }
     process {
         foreach ($swmr in $SwimmerData.Keys) {
@@ -907,7 +913,6 @@ function Get-ClubChampion {
     }
     process {
         foreach ($swimmer in $outputarray) {
-            write-host $swimmer.Swimmer
             $swimmer | Add-Member -MemberType NoteProperty -Name Place -Value $null
             $swmrage = [int]($swimmer.Category -replace '[a-zA-Z]','')
             $swmrevents = $SwimmerData[$swimmer.Swimmer]
