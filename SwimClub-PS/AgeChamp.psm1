@@ -9,12 +9,10 @@ function Get-SwimmerData {
     }
     process {
         foreach ($file in $files) {
-            $meetDate=($file.name).Substring(($file.name).indexof("_")+1,6)
             if ($file.name -like "clubchamps*") {
                 $csv = Import-Csv $file.FullName -Header (1..185)
                 $SwimmerCol = 125
                 $AgeCol = 126
-                $SeedCol = 128
                 $TimeCol = 131
                 $PointsCol = 134
                 $EventCol = 8
@@ -34,7 +32,6 @@ function Get-SwimmerData {
                     $eventname = "$($rawEventName[($scIndex + $StrokeIndex)])$($rawEventName[($scIndex + $DistIndex)])"
                     $properSwimmerName = ($line.$SwimmerCol).Replace('"', '')
                     $Age = ($line.$AgeCol).Replace('"',"").Trim()
-                    $Seed = ($line.$SeedCol).Replace('"', '')
                     $Time = ($line.$TimeCol).Replace('"', '')
                     if ($rawEventName[$Genderindex] -eq "Girls") {
                         $gender = 'Girls'
@@ -55,7 +52,6 @@ function Get-SwimmerData {
                     $properSwimmerName = ($line.name -replace '[^a-zA-Z ,-]','').Trim()
                     $Age=[int]($line.age -replace '[^0-9]','')
                     $time = $line.time
-                    $seed = $line.seedtime
                     if ($line.points) {
                         $points = $line.points
                     }
@@ -101,7 +97,7 @@ function Confirm-SwimmerData {
     process {
         foreach ($evt in $SwimmerData.Keys) {
             foreach ($cat in $SwimmerData[$evt].Keys) {
-                $sorted = $SwimmerData[$evt][$cat] | sort timespan
+                $sorted = $SwimmerData[$evt][$cat] | Sort-Object timespan
                 if ($sorted.count -gt 1) {
                     foreach ($i in (0..($sorted.count-1))) {
                         if ($i -eq 0) {
@@ -137,8 +133,8 @@ function Get-AgeChampions {
         $outputarray = @()
     }
     process {
-        $swimmers = $data.values.values.Swimmer | select -unique
-        $events = $data.Keys
+        $swimmers = $SwimmerData.values.values.Swimmer | Select-Object -unique
+        $events = $SwimmerData.Keys
         foreach ($swimmer in $swimmers) {
             $obj = New-Object psobject
             $obj | Add-Member -MemberType NoteProperty -Name Swimmer -Value $swimmer
@@ -152,7 +148,7 @@ function Get-AgeChampions {
         foreach ($evt in $SwimmerData.Keys) {
             foreach ($cat in $SwimmerData[$evt].Keys) {
                 foreach ($swimmer in $SwimmerData[$evt][$cat]) {
-                    $arrayobj = $outputarray | where {$_.Swimmer -eq $swimmer.Swimmer}
+                    $arrayobj = $outputarray | Where-Object {$_.Swimmer -eq $swimmer.Swimmer}
                     $arrayobj.Category = $cat
                     $arrayobj.$evt = $swimmer.Points
                 }
@@ -167,7 +163,50 @@ function Get-AgeChampions {
         }   
     }
     end {
-        Write-Output ($outputarray | sort Category, TotalPoints -Descending)
+        Write-Output ($outputarray | Sort-Object Category, TotalPoints -Descending)
+    }
+}
+
+function Get-SwimmerCategories {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true,Position=0)]$SwimmerData
+    )
+    begin {
+        $outputarray = @()
+    }
+    process {
+        $swimmers = $SwimmerData.values.values.Swimmer | Select-Object -unique
+        foreach ($swimmer in $swimmers) {
+            
+            $obj = New-Object psobject
+            $obj | Add-Member -MemberType NoteProperty -Name Swimmer -Value $swimmer
+            $obj | Add-Member -MemberType NoteProperty -Name Category -Value $null
+            $obj | Add-Member -MemberType NoteProperty -Name TotalPoints -Value $null
+            foreach ($evt in $events) {
+                $obj | Add-Member -MemberType NoteProperty -Name $evt -Value $null
+            }
+            $outputarray += $obj
+        }
+        foreach ($evt in $SwimmerData.Keys) {
+            foreach ($cat in $SwimmerData[$evt].Keys) {
+                foreach ($swimmer in $SwimmerData[$evt][$cat]) {
+                    $arrayobj = $outputarray | Where-Object {$_.Swimmer -eq $swimmer.Swimmer}
+                    $arrayobj.Category = $cat
+                    $arrayobj.$evt = $swimmer.Points
+                }
+            }
+        }
+        foreach ($swimmer in $outputarray) {
+            $totalpoints = 0
+            foreach ($evt in $events) {
+                $totalpoints += $swimmer.$evt
+            }
+            $swimmer.TotalPoints = $totalpoints
+        }   
+    }
+    end {
+        Write-Output ($outputarray | Sort-Object Category, TotalPoints -Descending)
     }
 }
 

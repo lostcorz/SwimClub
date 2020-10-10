@@ -1,18 +1,19 @@
-﻿# PATH VARIABLES
+Clear-Host
+# PATH VARIABLES
 #-------------------------------------------
 # Path To Meet Manager CSV Exports
-$SwimDataPath = "D:\Home\Shaun\OneDrive\Documents\SwimClub\MeetData" #"C:\Users\Pine Rivers P&C\MeetData"
+$SwimDataPath = "C:\Users\PRCAClub\MeetData"
 #-------------------------------------------
 # Path to Google Drive
-$GoogleDrivePath = "D:\Home\Shaun\OneDrive\Documents\SwimClub\GoogleDrive" #"C:\Users\Pine Rivers P&C\Google Drive\Pine Rivers Community Aquatics"
+$GoogleDrivePath = "C:\Users\PRCAClub\Google Drive\Pine Rivers Community Aquatics"
 #-------------------------------------------
 # Path To Laptop Documents Directory
-$DocumentsPath = "D:\Home\Shaun\OneDrive\Documents\SwimClub\Documents" #"C:\Users\Pine Rivers P&C\Documents"
+$DocumentsPath = "C:\Users\PRCAClub\Documents"
 #-------------------------------------------
 # Folder & Filename of Club Champion Reference Times & Swimmer Categories
 $ClubChampFolder = "ClubChampionReferences"
 $QualTimesCsv = "ClubChampTimes.csv"
-$CategoryCsv = "SwimmersCategories.csv"
+$CategoryCsv = "SwimCentralMemberExport.csv"
 #-------------------------------------------
 
 # Get the date and workout the current season
@@ -26,7 +27,6 @@ if ($Month -ge 7) {
 else {
     $shortseason = "$($longyear - 1)-$($shortyear)"
 }
-#clear-host
 
 #Ask if the current season is to be used?
 do {
@@ -73,13 +73,11 @@ do {
         "1" {
             if (Test-Path "$($ResultsPath)\AwardsList.csv") {
                 $importinput = "Y"
-                $newawards = Get-AchievementAwards $cleandata -AwardsListLocation $ResultsPath
-                $updatedawards = Update-AwardsList -NewAwardData $newawards -AwardsListLocation $ResultsPath
+                $newawards = Get-AchievementAwards $cleandata -AwardsListLocation $ResultsPath -Verbose
             }
             else {
                 $importinput = "N"
                 $newawards = Get-AchievementAwards $cleandata -Verbose
-                $updatedawards = Update-AwardsList -NewAwardData $newawards
             }    
             #clear-host
             if ($newawards) {
@@ -104,9 +102,18 @@ do {
                 elseif ($importinput -eq "y") {
                     Copy-Item "$($ResultsPath)\AwardsList.csv" -Destination "$($ResultsPath)\_HistoricAwardslists\AwardsList_$($date.tostring('yyMMdd')).csv"
                 }
+                if ($importinput -eq "y") {
+                    $updatedawards = Update-AwardsList -NewAwardData $newawards -AwardsListLocation $ResultsPath
+                }
+                else {
+                    $updatedawards = Update-AwardsList -NewAwardData $newawards
+                }
                 $updatedawards | Export-Csv -NoTypeInformation "$($ResultsPath)\AwardsList.csv" -force
                 #clear-host
                 Write-Host "Achievement Award report was written to $($ResultsPath)\AchievementAwards\Awards_$clubnightdate.txt"
+            }
+            else {
+                Write-Host "No new Achievement Awards"
             }
             do {
                 $returnmenu = Read-Host `

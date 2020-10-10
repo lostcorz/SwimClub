@@ -110,11 +110,11 @@ function Get-SwimmerData {
             $meetDate=($file.name).Substring(($file.name).indexof("_")+1,6)
             if ($file.name -like "ClubNight_*") {
                 $csv = Import-Csv $file.FullName -Header (1..185)
-                $SwimmerCol = 125
-                $AgeCol = 126
-                $SeedCol = 128
-                $TimeCol = 131
-                $PointsCol = 134
+                $SwimmerCol = 20
+                $AgeCol = 21
+                $SeedCol = 23
+                $TimeCol = 26
+                $PointsCol = 29
                 $EventCol = 8
                 $DistIndex = (0-1) #Event Distance relative to 'SC' in string
                 $StrokeIndex = (0+2) #Event name relative to 'SC' in string
@@ -422,6 +422,9 @@ function Get-AchievementAwards {
                     }
                     elseif ($swmrawards -notlike "*$($award)*" -and $newawards -ne $null) {
                         $newawards += ", $award"
+                    }
+                    else {
+                        Write-Verbose "$swimmer has already earnt award for $award"
                     }
                 }
                 if ($newawards) {
@@ -907,41 +910,57 @@ function Get-ClubChampion {
         [Parameter(Mandatory=$true)]$QualTimesPath
     )
     begin {
-        $outputarray = Import-Csv $CategoryPath
+        $outputarray = @()
+        $memberdetails = Import-Csv $CategoryPath
         $qualtimes = import-csv $QualTimesPath
         $clubchamp = $PRCACAwardsConfig['ClubChampion']
+        $lastclubnight = Get-LastClubNight $SwimmerData
     }
-    process {
-        foreach ($swimmer in $outputarray) {
-            $swimmer | Add-Member -MemberType NoteProperty -Name Place -Value $null
-            $swmrage = [int]($swimmer.Category -replace '[a-zA-Z]','')
-            $swmrevents = $SwimmerData[$swimmer.Swimmer]
-            $swmrPercentages = @()
-            foreach ($evt in $qualtimes) {
-                if ($evt.Event -in $swmrevents.keys -and $swmrage -ge $clubchamp['MinAge']) {
-                    $stroketimes = @()
-                    foreach ($i in ($swmrevents[($evt.Event)].Time | Where-Object {$_ -ne 'DQ'})) {
-                        $stroketimes += [timespan]::ParseExact($i, $timepatterns, [cultureinfo]::CurrentCulture)
+    Process {
+        foreach ($Swimmer in $SwimmerData.Keys) {
+            try {
+                $SwimmerDetails = Get-SwimmersCategory -SwimmersName $Swimmer -ClubNightDate $lastclubnight -MemberData $memberdetails -Verbose
+            }
+            catch {
+                continue
+            }
+            if ($SwimmerDetails['Age'] -ge $clubchamp['MinAge']) {
+                $swimmerCategory = "$($SwimmerDetails['Age'])$($SwimmerDetails['Gender'])"
+                $SwimmerRecord = New-Object psobject
+                $SwimmerRecord | Add-Member -MemberType NoteProperty -Name "Swimmer" -Value $Swimmer
+                $SwimmerRecord | Add-Member -MemberType NoteProperty -Name "Category" -Value $swimmerCategory
+                $SwimmerRecord | Add-Member -MemberType NoteProperty -Name "Place" -Value $null
+                $swmrPercentages = @()
+                foreach ($evt in $qualtimes.Event) {
+                    if ($evt -in $SwimmerData[$swimmer].keys) {
+                        $stroketimes = @()
+                        foreach ($i in ($SwimmerData[$swimmer][$evt].Time | Where-Object {$_ -ne 'DQ'})) {
+                            $stroketimes += [timespan]::ParseExact($i, $timepatterns, [cultureinfo]::CurrentCulture)
+                        }
+                        Write-Verbose "$($stroketimes.count) count of $($evt) in $($Swimmer)'s Events"
+                        $fastesttimespan = ($stroketimes | Measure-Object -Minimum).Minimum
+                        $qualtime = ($qualtimes | Where-Object {$_.event -eq $evt}).$swimmerCategory
+                        $qualtimespan = [TimeSpan]::FromSeconds($qualtime)
+                        $percentdif = $fastesttimespan.TotalMilliseconds / $qualtimespan.TotalMilliseconds * 100
+                        $evtpercent = [math]::Round($percentdif,2)
+                        $SwimmerRecord | Add-Member -MemberType NoteProperty -Name $evt -Value $evtpercent
+                        $swmrPercentages += $evtpercent
                     }
-                    Write-Verbose "$($stroketimes.count) count of $($evt.Event) in $($Swimmer.Swimmer)'s Events"
-                    $fastesttimespan = ($stroketimes | Measure-Object -Minimum).Minimum
-                    $qualtime = ($qualtimes | Where-Object {$_.event -eq $evt.Event}).($swimmer.Category)
-                    $qualtimespan = [TimeSpan]::FromSeconds($qualtime)
-                    $percentdif = $fastesttimespan.TotalMilliseconds / $qualtimespan.TotalMilliseconds * 100
-                    $evtpercent = [math]::Round($percentdif,2)
-                    $swimmer | Add-Member -MemberType NoteProperty -Name $evt.Event -Value $evtpercent
-                    $swmrPercentages += $evtpercent
+                    else {
+                        $SwimmerRecord | Add-Member -MemberType NoteProperty -Name $evt -Value 'N/A'
+                    }    
+                }
+                $outputarray += $SwimmerRecord
+                if ($swmrPercentages.count -ge $clubchamp['topxevents']) {
+                    $finalpercent = ($swmrPercentages | Sort-Object | Select-Object -First $clubchamp['topxevents'] | Measure-Object -Sum).Sum
+                    $SwimmerRecord | Add-Member -MemberType NoteProperty -Name 'TotalPercentage' -Value $finalpercent
                 }
                 else {
-                    $swimmer | Add-Member -MemberType NoteProperty -Name $evt.Event -Value 'N/A'
+                    $SwimmerRecord | Add-Member -MemberType NoteProperty -Name 'TotalPercentage' -Value 'N/A'
                 }
             }
-            if ($swmrPercentages.count -ge $clubchamp['topxevents']) {
-                $finalpercent = ($swmrPercentages | Sort-Object | Select-Object -First $clubchamp['topxevents'] | Measure-Object -Sum).Sum
-                $swimmer | Add-Member -MemberType NoteProperty -Name 'TotalPercentage' -Value $finalpercent
-            }
             else {
-                $swimmer | Add-Member -MemberType NoteProperty -Name 'TotalPercentage' -Value 'N/A'
+                Write-Verbose "$swimmer does not qualify for Club Champion"
             }
         }
         $orderedarray = $outputarray | Where-Object {$_.TotalPercentage -ne 'N/A'} | Sort-Object TotalPercentage
@@ -951,8 +970,8 @@ function Get-ClubChampion {
             $outobj.Place = $place
         }
     }
-    end {
-        Write-Output ($outputarray | Sort-Object Place)
+    End {
+        Write-Output ($orderedarray | sort place)
     }
 }
 function Update-AwardsList {
@@ -1073,41 +1092,62 @@ function Get-SwimmersEvents {
         Write-Output ($outputarray | Sort-Object Event, Date)
     }
 }
-function Get-ExcelData {
+function Get-LastClubNight {
     [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true,Position=0)]$SwimmerData,
-        [Parameter(Mandatory=$true,Position=1)][ValidateSet('Jake','Levi','Grace')]$Swimmer
+    Param (
+        [Parameter(Mandatory=$true,Position=0)]$SwimData
+    )
+    Process {
+        $ClubNight = [string](($SwimData.Values.values.date | measure -Maximum).Maximum)
+    }
+    End {
+        Write-Output $ClubNight
+    }
+}
+function Get-SwimmersCategory {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true,Position=0)]$SwimmersName,
+        [Parameter(Mandatory=$true,Position=1)]$ClubNightDate,
+        [Parameter(Mandatory=$true,Position=2)]$MemberData
     )
     Begin {
-        $outputarray = @()
-        $SwimmersName = "Swenson, $swimmer"
+        $SwimmersInfo = @{}
     }
-    process {
-        $meetdates = $SwimmerData.$SwimmersName.Values.Date | Select-Object -Unique | Sort-Object
-        foreach ($meet in $meetdates) {
-            $obj = New-Object psobject
-            $obj | Add-Member -MemberType NoteProperty -Name Date -Value $meet
-            foreach ($stroke in $SwimmerData.$SwimmersName.Keys) {
-                $meetdata = $SwimmerData.$SwimmersName.$stroke | Where-Object {$_.date -eq $meet}
-                if ($meetdata) {
-                    $obj | Add-Member -MemberType NoteProperty -Name $stroke -Value $meetdata.Time
-                }
-            }
-            if ($outputarray) {
-                $newobjs = $obj | Get-Member | Where-Object {$_.MemberType -eq "NoteProperty" -and $_.Name -notin (($outputarray | Get-Member).Name)}
-                foreach ($new in $newobjs) {
-                    $outputarray | Add-Member -MemberType NoteProperty -Name $new.name -Value $null
-                }
-            }
-            $outputarray += $obj
+    Process {
+        $lastClubNight = [Datetime]::ParseExact([string]$clubnightdate, 'yyMMdd', $null)
+        $firstLast = $SwimmersName.split(",")
+        $gn = $firstLast[1].Trim()
+        $sn = $firstLast[0].Trim()
+        $swimmersDetails = $MemberData | where {($_."Last Name").trim() -eq $sn -and ($_."First Name").trim() -eq $gn}
+        if (-not $swimmersDetails) {
+            Write-Verbose "No member data for $($SwimmersName) - check firstname/lastname and spelling."
+            Continue
         }
+        $dob = [Datetime]::ParseExact($swimmersDetails.BirthDate, 'dd/MM/yyyy', $null)
+        #have they had their birthday this year? if so, get age from this year, else get the age from last year
+        if (($lastClubNight.DayOfYear - $dob.DayOfYear) -ge 0) {
+            $SwimmersAge = $lastClubNight.Year - $dob.Year
+        }
+        else {
+            $SwimmersAge = ($lastClubNight.Year - 1) - $dob.Year
+        }
+        if ($swimmersDetails.Gender -eq "Female") {
+            $SwimmersGender = "Girls"
+        }
+        else {
+            $SwimmersGender = "Boys"
+        }
+        $SwimmersInfo['Age'] = $SwimmersAge
+        $SwimmersInfo['Gender'] = $SwimmersGender
     }
-    end {
-        Write-Output ($outputarray | Select-Object Date, *25, *50, *00 | Sort-Object Date)  
+    End {
+        Write-Output $SwimmersInfo
     }
 }
 [String[]]$timepatterns = @(
+            'sssfff'
+            'ssfff'
             'ss'
             'ss\.ff'
             'ss\.f'
@@ -1131,4 +1171,5 @@ Export-ModuleMember -function Get-EnduranceTrophies
 Export-ModuleMember -function Get-ClubChampion
 Export-ModuleMember -function Get-ModifiedData
 Export-ModuleMember -function Get-SwimmersEvents
-Export-ModuleMember -function Get-ExcelData
+Export-ModuleMember -function Get-SwimmersCategory
+Export-ModuleMember -Function Get-LastClubNight
